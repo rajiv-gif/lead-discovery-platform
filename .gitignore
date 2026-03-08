@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+*.egg
+
+# Environment
+.env
+.env.local
+
+# Data (raw HTML and LLM artifacts stay local)
+data/pages/
+data/llm_runs/
+
+# Database
+*.db
+*.sqlite
+
+# Alembic (keep migrations, ignore cache)
+alembic/versions/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
