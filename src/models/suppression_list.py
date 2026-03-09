@@ -14,27 +14,29 @@ from src.models.mixins import TimestampMixin, UUIDPrimaryKey
 class SuppressionList(UUIDPrimaryKey, TimestampMixin, Base):
     """Suppression entries that block outreach to specific values.
 
-    ``type`` + ``value`` is unique — you can't suppress the same email twice.
-    ``expires_at`` is null for permanent suppression.
+    ``suppression_type`` + ``value`` is unique — you can't suppress the
+    same email twice. ``expires_at`` is null for permanent suppression.
+
+    Column is named ``suppression_type`` (not ``type``) to avoid shadowing
+    the Python built-in and SQLAlchemy's internal polymorphic type column.
 
     Examples:
-        type=EMAIL,  value="bad@example.com"   → block this address
-        type=DOMAIN, value="competitor.com"    → block entire domain
-        type=PHONE,  value="+14155550000"      → block this number
-        type=COMPANY, value="Acme Corp"        → block by company name
+        suppression_type=EMAIL,  value="bad@example.com"   → block this address
+        suppression_type=DOMAIN, value="competitor.com"    → block entire domain
+        suppression_type=PHONE,  value="+14155550000"      → block this number
+        suppression_type=COMPANY, value="Acme Corp"        → block by company name
     """
 
     __tablename__ = "suppression_list"
     __table_args__ = (
-        UniqueConstraint("type", "value", name="uq_suppression_type_value"),
+        UniqueConstraint("suppression_type", "value", name="uq_suppression_type_value"),
     )
 
-    type: Mapped[SuppressionType] = mapped_column(
+    suppression_type: Mapped[SuppressionType] = mapped_column(
         SAEnum(SuppressionType, name="suppressiontype"),
         nullable=False,
         index=True,
     )
-    # The suppressed value (email address, domain, phone in E.164, company name)
     value: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reason: Mapped[SuppressionReason] = mapped_column(
         SAEnum(SuppressionReason, name="suppressionreason"),

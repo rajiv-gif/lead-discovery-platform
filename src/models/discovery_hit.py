@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Enum as SAEnum, ForeignKey, Text, UniqueConstraint
 from sqlalchemy import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,8 +20,13 @@ if TYPE_CHECKING:
 class DiscoveryHit(UUIDPrimaryKey, TimestampMixin, Base):
     """A single URL found during discovery for a campaign.
 
+    Tracks discovery and extraction pipeline state only. Scraping
+    metadata (fetched_at, http_status_code, raw HTML path) belongs on
+    ``CompanyPage``, which is created after a successful scrape.
+
     ``company_id`` is null until extraction resolves the hit to a company.
-    ``raw_html_path`` is never stored here — see CompanyPage for scraped content.
+    ``error_message`` records the failure reason when status=failed,
+    allowing pipeline debugging without re-running the full stage.
     """
 
     __tablename__ = "discovery_hits"
@@ -56,10 +60,8 @@ class DiscoveryHit(UUIDPrimaryKey, TimestampMixin, Base):
         default=DiscoveryHitStatus.PENDING,
         index=True,
     )
-    fetched_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    http_status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Populated when status = failed; null otherwise
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     campaign: Mapped[Campaign] = relationship("Campaign", back_populates="discovery_hits")
     company: Mapped[Optional[Company]] = relationship(

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Text
 from sqlalchemy import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,26 +18,44 @@ if TYPE_CHECKING:
 
 
 class Phone(UUIDPrimaryKey, TimestampMixin, Base):
-    """A phone number associated with a contact or company.
+    """A phone number anchored to a company, optionally linked to a contact.
+
+    ``company_id`` is REQUIRED on every row — all phone numbers must belong
+    to a company. ``contact_id`` is optional and links the number to a
+    specific person at that company.
 
     ``number`` stores the normalised E.164 value after verification.
     ``raw_number`` preserves the original string as extracted.
 
-    Ownership mirrors Email: one of ``contact_id`` or ``company_id``
-    should be set; both nullable to allow either.
+    Access patterns:
+        - company main line (switchboard):
+              company_id set, contact_id NULL
+        - direct dial / mobile:
+              company_id set, contact_id set
+
+    The CHECK constraint ``ck_phone_has_owner`` mirrors the intent on Email:
+    redundant given ``company_id NOT NULL``, but kept for clarity.
     """
 
     __tablename__ = "phones"
+    __table_args__ = (
+        CheckConstraint(
+            "contact_id IS NOT NULL OR company_id IS NOT NULL",
+            name="ck_phone_has_owner",
+        ),
+    )
 
+    # Required: every phone must trace back to a company
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        SAUUID(as_uuid=True),
+        ForeignKey("companies.id"),
+        nullable=False,
+        index=True,
+    )
+    # Optional: links to a specific person at the company
     contact_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("contacts.id"),
-        nullable=True,
-        index=True,
-    )
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        SAUUID(as_uuid=True),
-        ForeignKey("companies.id"),
         nullable=True,
         index=True,
     )
@@ -56,7 +74,7 @@ class Phone(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
     contact: Mapped[Optional[Contact]] = relationship("Contact", back_populates="phones")
-    company: Mapped[Optional[Company]] = relationship(
+    company: Mapped[Company] = relationship(
         "Company",
         back_populates="phones",
         foreign_keys=[company_id],

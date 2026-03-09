@@ -28,10 +28,11 @@ class DiscoveryHitStatus(str, enum.Enum):
 
 
 class DiscoveryHitSourceType(str, enum.Enum):
+    # Phase 1 source types only. LinkedIn adapter is Phase 2+ — do not add
+    # LINKEDIN here until that work is scoped and the migration is ready.
     GOOGLE_MAPS = "google_maps"
     DIRECTORY = "directory"
     MANUAL = "manual"
-    LINKEDIN = "linkedin"
     WEB_SEARCH = "web_search"
 
 

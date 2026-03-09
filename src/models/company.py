@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Integer, JSON, Text
+from sqlalchemy import Integer, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base
@@ -22,6 +23,11 @@ class Company(UUIDPrimaryKey, TimestampMixin, Base):
 
     The central entity of the platform. Created during extraction and
     enriched by subsequent pipeline stages.
+
+    All ``Email`` and ``Phone`` rows require ``company_id`` — so
+    ``company.emails`` and ``company.phones`` return ALL addresses for this
+    company (both generic/direct and contact-linked). Filter by
+    ``contact_id IS NULL`` in application code for generic-only entries.
     """
 
     __tablename__ = "companies"
@@ -40,7 +46,7 @@ class Company(UUIDPrimaryKey, TimestampMixin, Base):
     employee_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     founded_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Overflow for source-specific fields that don't map to core columns
-    extra_fields: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     pages: Mapped[list[CompanyPage]] = relationship("CompanyPage", back_populates="company")
     contacts: Mapped[list[Contact]] = relationship("Contact", back_populates="company")
@@ -51,17 +57,17 @@ class Company(UUIDPrimaryKey, TimestampMixin, Base):
     discovery_hits: Mapped[list[DiscoveryHit]] = relationship(
         "DiscoveryHit", back_populates="company"
     )
-    # Company-level emails (e.g. info@company.com, not tied to a contact)
+    # All emails where company_id matches — direct and contact-linked combined.
+    # Previous viewonly/filtered relationship removed: company_id is now required
+    # on ALL Email rows, so no filtering by contact_id is needed here.
     emails: Mapped[list[Email]] = relationship(
         "Email",
-        primaryjoin="and_(Email.company_id == Company.id, Email.contact_id == None)",
         back_populates="company",
-        viewonly=True,
+        foreign_keys="[Email.company_id]",
     )
-    # Company-level phones (e.g. main office number)
+    # All phones where company_id matches — direct and contact-linked combined.
     phones: Mapped[list[Phone]] = relationship(
         "Phone",
-        primaryjoin="and_(Phone.company_id == Company.id, Phone.contact_id == None)",
         back_populates="company",
-        viewonly=True,
+        foreign_keys="[Phone.company_id]",
     )

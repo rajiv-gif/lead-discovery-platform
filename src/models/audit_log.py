@@ -4,7 +4,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum as SAEnum, Index, JSON, Text
+from sqlalchemy import DateTime, Enum as SAEnum, Index, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,5 +45,5 @@ class AuditLog(UUIDPrimaryKey, Base):
     )
     # Who or what made the change ("cli", "pipeline", a username, etc.)
     changed_by: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    old_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    new_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    old_values: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    new_values: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

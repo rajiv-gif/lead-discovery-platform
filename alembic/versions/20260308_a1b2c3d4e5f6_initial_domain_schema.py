@@ -2,6 +2,19 @@
 
 Creates all 10 domain tables and their 11 PostgreSQL enum types.
 
+Schema corrections applied vs first draft:
+  - emails.company_id: NOT NULL (required); contact_id nullable (optional)
+  - phones.company_id: NOT NULL (required); contact_id nullable (optional)
+  - emails / phones: CHECK (contact_id IS NOT NULL OR company_id IS NOT NULL)
+  - suppression_list: column renamed type → suppression_type; index renamed
+  - discoveryhitsourcetype: removed 'linkedin' (Phase 2+)
+  - discovery_hits: removed fetched_at / http_status_code (belong on
+    company_pages); added error_message for failure diagnostics
+  - company_leads: added score_details JSONB, review_decided_at;
+    replaced separate review_status index with compound (review_status,
+    score DESC) index; kept status index for pipeline-state queries
+  - All JSON columns use JSONB consistently
+
 Revision ID: a1b2c3d4e5f6
 Revises:
 Create Date: 2026-03-08
@@ -11,7 +24,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from alembic import op
 
@@ -21,7 +34,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 # ---------------------------------------------------------------------------
-# Helpers — enum type creation / deletion
+# Enum type registry
 # ---------------------------------------------------------------------------
 
 _ENUM_TYPES: list[tuple[str, list[str]]] = [
@@ -29,7 +42,8 @@ _ENUM_TYPES: list[tuple[str, list[str]]] = [
     ("discoveryhitstatus", ["pending", "scraped", "extracted", "failed", "skipped"]),
     (
         "discoveryhitsourcetype",
-        ["google_maps", "directory", "manual", "linkedin", "web_search"],
+        # 'linkedin' removed — Phase 2+ scope; add via ALTER TYPE when implemented
+        ["google_maps", "directory", "manual", "web_search"],
     ),
     ("emailstatus", ["unverified", "valid", "invalid", "catch_all", "risky"]),
     ("phonetype", ["mobile", "office", "direct", "fax", "unknown"]),
@@ -69,12 +83,10 @@ def _sa_enum(name: str) -> sa.Enum:
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # 1. Create all PostgreSQL enum types first
+    # 1. Create all PostgreSQL enum types before any table
     for type_name, values in _ENUM_TYPES:
         quoted = ", ".join(f"'{v}'" for v in values)
-        conn.execute(
-            sa.text(f"CREATE TYPE {type_name} AS ENUM ({quoted})")
-        )
+        conn.execute(sa.text(f"CREATE TYPE {type_name} AS ENUM ({quoted})"))
 
     # 2. campaigns (no FKs)
     op.create_table(
@@ -111,19 +123,24 @@ def upgrade() -> None:
     op.create_index("ix_companies_domain", "companies", ["domain"])
 
     # 4. suppression_list (no FKs)
+    #    Column renamed: type → suppression_type (avoids Python built-in shadowing)
     op.create_table(
         "suppression_list",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("type", _sa_enum("suppressiontype"), nullable=False),
+        sa.Column("suppression_type", _sa_enum("suppressiontype"), nullable=False),
         sa.Column("value", sa.Text(), nullable=False),
         sa.Column("reason", _sa_enum("suppressionreason"), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("type", "value", name="uq_suppression_type_value"),
+        sa.UniqueConstraint(
+            "suppression_type", "value", name="uq_suppression_type_value"
+        ),
     )
-    op.create_index("ix_suppression_list_type", "suppression_list", ["type"])
+    op.create_index(
+        "ix_suppression_list_suppression_type", "suppression_list", ["suppression_type"]
+    )
     op.create_index("ix_suppression_list_value", "suppression_list", ["value"])
 
     # 5. audit_log (no FK — generic table_name + record_id)
@@ -143,6 +160,9 @@ def upgrade() -> None:
     )
 
     # 6. discovery_hits → campaigns, companies
+    #    Removed: fetched_at, http_status_code — those belong on company_pages,
+    #    which is the authoritative record of each scrape attempt.
+    #    Added:   error_message — records failure reason when status=failed.
     op.create_table(
         "discovery_hits",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -159,14 +179,9 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("source_url", sa.Text(), nullable=False),
-        sa.Column(
-            "source_type", _sa_enum("discoveryhitsourcetype"), nullable=False
-        ),
-        sa.Column(
-            "status", _sa_enum("discoveryhitstatus"), nullable=False
-        ),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("http_status_code", sa.Integer(), nullable=True),
+        sa.Column("source_type", _sa_enum("discoveryhitsourcetype"), nullable=False),
+        sa.Column("status", _sa_enum("discoveryhitstatus"), nullable=False),
+        sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint(
@@ -182,6 +197,8 @@ def upgrade() -> None:
     op.create_index("ix_discovery_hits_status", "discovery_hits", ["status"])
 
     # 7. company_pages → companies, discovery_hits
+    #    Authoritative record of each scrape: fetched_at, http_status_code,
+    #    raw_html_path, content_hash all live here (not on discovery_hits).
     op.create_table(
         "company_pages",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -210,9 +227,7 @@ def upgrade() -> None:
         "ix_company_pages_company_id", "company_pages", ["company_id"]
     )
     op.create_index(
-        "ix_company_pages_discovery_hit_id",
-        "company_pages",
-        ["discovery_hit_id"],
+        "ix_company_pages_discovery_hit_id", "company_pages", ["discovery_hit_id"]
     )
 
     # 8. contacts → companies
@@ -237,21 +252,25 @@ def upgrade() -> None:
     )
     op.create_index("ix_contacts_company_id", "contacts", ["company_id"])
 
-    # 9. emails → contacts (nullable), companies (nullable)
+    # 9. emails → companies (NOT NULL), contacts (nullable)
+    #    company_id is required on every row — no orphan emails.
+    #    contact_id is optional (NULL = generic company-level address).
+    #    CHECK constraint is redundant given company_id NOT NULL but is
+    #    kept explicit for readability.
     op.create_table(
         "emails",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column(
-            "contact_id",
-            UUID(as_uuid=True),
-            sa.ForeignKey("contacts.id"),
-            nullable=True,
-        ),
-        sa.Column(
             "company_id",
             UUID(as_uuid=True),
             sa.ForeignKey("companies.id"),
-            nullable=True,
+            nullable=False,   # ← required
+        ),
+        sa.Column(
+            "contact_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("contacts.id"),
+            nullable=True,    # ← optional
         ),
         sa.Column("address", sa.Text(), nullable=False),
         sa.Column("status", _sa_enum("emailstatus"), nullable=False),
@@ -260,26 +279,31 @@ def upgrade() -> None:
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint(
+            "contact_id IS NOT NULL OR company_id IS NOT NULL",
+            name="ck_email_has_owner",
+        ),
     )
-    op.create_index("ix_emails_contact_id", "emails", ["contact_id"])
     op.create_index("ix_emails_company_id", "emails", ["company_id"])
+    op.create_index("ix_emails_contact_id", "emails", ["contact_id"])
     op.create_index("ix_emails_address", "emails", ["address"])
 
-    # 10. phones → contacts (nullable), companies (nullable)
+    # 10. phones → companies (NOT NULL), contacts (nullable)
+    #     Same ownership model as emails.
     op.create_table(
         "phones",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column(
-            "contact_id",
-            UUID(as_uuid=True),
-            sa.ForeignKey("contacts.id"),
-            nullable=True,
-        ),
-        sa.Column(
             "company_id",
             UUID(as_uuid=True),
             sa.ForeignKey("companies.id"),
-            nullable=True,
+            nullable=False,   # ← required
+        ),
+        sa.Column(
+            "contact_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("contacts.id"),
+            nullable=True,    # ← optional
         ),
         sa.Column("number", sa.Text(), nullable=False),
         sa.Column("raw_number", sa.Text(), nullable=True),
@@ -288,11 +312,16 @@ def upgrade() -> None:
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint(
+            "contact_id IS NOT NULL OR company_id IS NOT NULL",
+            name="ck_phone_has_owner",
+        ),
     )
-    op.create_index("ix_phones_contact_id", "phones", ["contact_id"])
     op.create_index("ix_phones_company_id", "phones", ["company_id"])
+    op.create_index("ix_phones_contact_id", "phones", ["contact_id"])
 
-    # 11. company_leads → companies (unique), campaigns (nullable)
+    # 11. company_leads → companies (unique 1:1), campaigns (nullable)
+    #     Added: score_details JSONB, review_decided_at
     op.create_table(
         "company_leads",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -311,8 +340,12 @@ def upgrade() -> None:
         sa.Column("status", _sa_enum("leadstatus"), nullable=False),
         sa.Column("score", sa.Float(), nullable=True),
         sa.Column("score_band", _sa_enum("scoreband"), nullable=True),
+        # Per-dimension score breakdown for auditing / weight tuning
+        sa.Column("score_details", JSONB(), nullable=True),
         sa.Column("review_status", _sa_enum("reviewstatus"), nullable=False),
         sa.Column("reviewer_notes", sa.Text(), nullable=True),
+        # Set when review decision is made (approved OR rejected)
+        sa.Column("review_decided_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("qualified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("contacted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("converted_at", sa.DateTime(timezone=True), nullable=True),
@@ -327,9 +360,17 @@ def upgrade() -> None:
     op.create_index(
         "ix_company_leads_campaign_id", "company_leads", ["campaign_id"]
     )
+    # leadstatus index — covers pipeline-state queries independent of review_status
     op.create_index("ix_company_leads_status", "company_leads", ["status"])
-    op.create_index(
-        "ix_company_leads_review_status", "company_leads", ["review_status"]
+    # Compound review-queue index with DESC score ordering.
+    # Left prefix (review_status) makes a separate ix_company_leads_review_status
+    # index redundant, so it is not created.
+    # SQLAlchemy __table_args__ cannot express DESC ordering, so raw SQL is used.
+    conn.execute(
+        sa.text(
+            "CREATE INDEX ix_company_leads_review_queue "
+            "ON company_leads (review_status, score DESC)"
+        )
     )
 
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, JSON, Text
+from sqlalchemy import ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,7 +41,7 @@ class Contact(UUIDPrimaryKey, TimestampMixin, Base):
     linkedin_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Where we found this contact (e.g. "company_page", "linkedin")
     source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    extra_fields: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     company: Mapped[Company] = relationship("Company", back_populates="contacts")
     emails: Mapped[list[Email]] = relationship("Email", back_populates="contact")
