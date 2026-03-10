@@ -36,6 +36,11 @@ class Company(UUIDPrimaryKey, TimestampMixin, Base):
     website: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # domain is extracted from website for dedup and suppression lookups
     domain: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    # Stable Google Places place_id — primary dedup key for Places-sourced companies.
+    # Stored as a dedicated indexed column (not inside extra_fields) so lookups are
+    # fast (B-tree index) without needing a GIN index on the JSONB blob.
+    # Null for companies created by other means (manual entry, directory scraping, etc.)
+    google_place_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     industry: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     linkedin_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

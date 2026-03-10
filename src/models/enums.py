@@ -36,6 +36,19 @@ class DiscoveryHitSourceType(str, enum.Enum):
     WEB_SEARCH = "web_search"
 
 
+class GeoMethod(str, enum.Enum):
+    """Geo-targeting method used when running discovery for a campaign.
+
+    Maps 1-to-1 to the ``geomethod`` PostgreSQL enum type created in the
+    ``b2c3d4e5f6a1`` migration.
+    """
+
+    CITY = "city"
+    POSTAL_CODE = "postal_code"
+    BOUNDING_BOX = "bounding_box"
+    CENTER_RADIUS = "center_radius"
+
+
 class EmailStatus(str, enum.Enum):
     UNVERIFIED = "unverified"
     VALID = "valid"

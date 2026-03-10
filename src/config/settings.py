@@ -26,6 +26,16 @@ class Settings:
 
         self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
+        # --- Google Places API ---
+        # Optional at load time; runner raises RuntimeError at use time if absent.
+        self.google_places_api_key: str | None = os.getenv("GOOGLE_PLACES_API_KEY")
+        # Seconds to sleep between successive Places API requests (rate limiting).
+        self.places_rate_limit_delay: float = float(
+            os.getenv("PLACES_RATE_LIMIT_DELAY", "0.5")
+        )
+        # Maximum number of result pages to fetch per query (20 results/page max).
+        self.places_max_pages: int = int(os.getenv("PLACES_MAX_PAGES", "3"))
+
     @staticmethod
     def _require(key: str) -> str:
         value = os.getenv(key)
