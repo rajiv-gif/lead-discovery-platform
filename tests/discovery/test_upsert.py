@@ -13,7 +13,7 @@ import pytest
 
 from src.discovery.places import PlaceResult
 from src.discovery.strategies import GeoQuery
-from src.discovery.upsert import create_discovery_hit, upsert_company
+from src.discovery.upsert import _build_extra_fields, create_discovery_hit, upsert_company
 from src.models.enums import DiscoveryHitSourceType, DiscoveryHitStatus
 
 
@@ -308,3 +308,49 @@ def test_create_discovery_hit_stores_geo_coords():
     assert added.discovery_lat == 51.5
     assert added.discovery_lng == -0.12
     assert added.discovery_radius_m == 5000
+
+
+# ---------------------------------------------------------------------------
+# _build_extra_fields — None filtering
+# ---------------------------------------------------------------------------
+
+
+def test_build_extra_fields_excludes_none_values():
+    """Keys whose PlaceResult value is None must not appear in extra_fields."""
+    result = make_result(
+        phone_number=None,
+        rating=None,
+        user_rating_count=None,
+        postal_code=None,
+        country_code=None,
+    )
+    extra = _build_extra_fields(result)
+
+    assert "phone" not in extra
+    assert "rating" not in extra
+    assert "user_rating_count" not in extra
+    assert "postal_code" not in extra
+    assert "country_code" not in extra
+
+
+def test_build_extra_fields_includes_present_values():
+    """Keys with non-None values must be present in extra_fields."""
+    result = make_result(
+        rating=4.5,
+        user_rating_count=100,
+        business_status="OPERATIONAL",
+    )
+    extra = _build_extra_fields(result)
+
+    assert extra["rating"] == 4.5
+    assert extra["user_rating_count"] == 100
+    assert extra["business_status"] == "OPERATIONAL"
+
+
+def test_build_extra_fields_keeps_empty_list_for_types():
+    """An empty types list is a valid value and must not be filtered out."""
+    result = make_result(types=[])
+    extra = _build_extra_fields(result)
+    # types=[] is falsy but not None — must be retained
+    assert "types" in extra
+    assert extra["types"] == []

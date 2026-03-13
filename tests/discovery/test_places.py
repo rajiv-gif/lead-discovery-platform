@@ -368,3 +368,63 @@ def test_city_request_body_no_location_restriction(mock_post, mock_sleep):
     body = mock_post.call_args.kwargs["json"]
     assert "locationRestriction" not in body
     assert body["textQuery"] == "dentists in London, UK"
+
+
+# ---------------------------------------------------------------------------
+# includedType in request body
+# ---------------------------------------------------------------------------
+
+
+@patch("time.sleep")
+@patch("httpx.post")
+def test_included_type_added_to_request_body_when_set(mock_post, mock_sleep):
+    """When GeoQuery.included_type is set, body must contain 'includedType'."""
+    mock_post.return_value = _make_response([])
+    query = GeoQuery(
+        text_query="dentists in London, UK",
+        location_restriction=None,
+        method="city",
+        center_lat=None,
+        center_lng=None,
+        radius_m=None,
+        included_type="dentist",
+    )
+    _make_client().search(query)
+
+    body = mock_post.call_args.kwargs["json"]
+    assert body.get("includedType") == "dentist"
+
+
+@patch("time.sleep")
+@patch("httpx.post")
+def test_included_type_absent_from_body_when_none(mock_post, mock_sleep):
+    """When GeoQuery.included_type is None, 'includedType' must not appear in body."""
+    mock_post.return_value = _make_response([])
+    # _city_query() leaves included_type at default None
+    _make_client().search(_city_query())
+
+    body = mock_post.call_args.kwargs["json"]
+    assert "includedType" not in body
+
+
+# ---------------------------------------------------------------------------
+# Dead-code removal regression — search() result count and identity
+# ---------------------------------------------------------------------------
+
+
+@patch("time.sleep")
+@patch("httpx.post")
+def test_search_returns_all_results_after_dead_code_removal(mock_post, mock_sleep):
+    """search() must return every PlaceResult from every page unchanged."""
+    page1 = [FULL_PLACE_RAW, {**FULL_PLACE_RAW, "id": "ChIJxxx"}]
+    page2 = [{**FULL_PLACE_RAW, "id": "ChIJyyy"}]
+    mock_post.side_effect = [
+        _make_response(page1, next_token="tok"),
+        _make_response(page2),
+    ]
+    results = _make_client(max_pages=3).search(_city_query())
+
+    assert len(results) == 3
+    assert results[0].place_id == "ChIJabc123"
+    assert results[1].place_id == "ChIJxxx"
+    assert results[2].place_id == "ChIJyyy"

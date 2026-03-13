@@ -38,6 +38,11 @@ class GeoQuery:
             for modes that do not specify a coordinate (city, postal_code).
         center_lng: Geographic centre longitude of the query region, or None.
         radius_m: Query radius in metres, or None for non-circle queries.
+        included_type: Optional Places API ``includedType`` filter.  When set,
+            the API returns only places whose type list contains this value,
+            ANDed with ``textQuery``.  Uses the singular Places type name
+            (e.g. ``"dentist"``).  Phase 1 always sets this to ``"dentist"``
+            to exclude non-dental results (equipment suppliers, schools, etc.).
     """
 
     text_query: str
@@ -46,6 +51,7 @@ class GeoQuery:
     center_lat: Optional[float]
     center_lng: Optional[float]
     radius_m: Optional[int]
+    included_type: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +101,7 @@ def _city_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=None,
             center_lng=None,
             radius_m=None,
+            included_type="dentist",
         )
     ]
 
@@ -113,6 +120,7 @@ def _postal_code_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=None,
             center_lng=None,
             radius_m=None,
+            included_type="dentist",
         )
     ]
 
@@ -150,6 +158,7 @@ def _bounding_box_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=center_lat,
             center_lng=center_lng,
             radius_m=None,
+            included_type="dentist",
         )
     ]
 
@@ -180,5 +189,6 @@ def _center_radius_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=campaign.geo_center_lat,
             center_lng=campaign.geo_center_lng,
             radius_m=campaign.geo_radius_m,
+            included_type="dentist",
         )
     ]

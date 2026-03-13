@@ -36,6 +36,20 @@ class Settings:
         # Maximum number of result pages to fetch per query (20 results/page max).
         self.places_max_pages: int = int(os.getenv("PLACES_MAX_PAGES", "3"))
 
+        # --- Scraper ---
+        # Seconds to sleep between fetches to the same domain.
+        self.scraper_rate_limit_delay: float = float(
+            os.getenv("SCRAPER_RATE_LIMIT_DELAY", "1.0")
+        )
+        # HTTP connection timeout in seconds.
+        self.scraper_connect_timeout: float = float(
+            os.getenv("SCRAPER_CONNECT_TIMEOUT", "10.0")
+        )
+        # HTTP read timeout in seconds.
+        self.scraper_read_timeout: float = float(
+            os.getenv("SCRAPER_READ_TIMEOUT", "30.0")
+        )
+
     @staticmethod
     def _require(key: str) -> str:
         value = os.getenv(key)

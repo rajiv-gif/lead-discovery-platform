@@ -146,32 +146,10 @@ class PlacesClient:
                 text_query=query.text_query,
                 location_restriction=query.location_restriction,
                 page_token=page_token,
+                included_type=query.included_type,
             )
 
-            # Assign global ranks across pages
-            offset = len(results)
-            for rank_in_page, pr in enumerate(page_results):
-                pr_with_rank = PlaceResult(
-                    place_id=pr.place_id,
-                    name=pr.name,
-                    formatted_address=pr.formatted_address,
-                    website_uri=pr.website_uri,
-                    domain=pr.domain,
-                    phone_number=pr.phone_number,
-                    rating=pr.rating,
-                    user_rating_count=pr.user_rating_count,
-                    latitude=pr.latitude,
-                    longitude=pr.longitude,
-                    city=pr.city,
-                    state=pr.state,
-                    country=pr.country,
-                    country_code=pr.country_code,
-                    postal_code=pr.postal_code,
-                    business_status=pr.business_status,
-                    types=pr.types,
-                    raw=pr.raw,
-                )
-                results.append(pr_with_rank)
+            results.extend(page_results)
 
             log.debug(
                 "Places page %d/%d: %d results (query=%r)",
@@ -195,6 +173,7 @@ class PlacesClient:
         text_query: str,
         location_restriction: Optional[dict],
         page_token: Optional[str],
+        included_type: Optional[str] = None,
     ) -> tuple[list[PlaceResult], Optional[str]]:
         """Make a single POST request and return ``(results, next_page_token)``."""
         body: dict = {
@@ -206,6 +185,8 @@ class PlacesClient:
             body["locationRestriction"] = location_restriction
         if page_token is not None:
             body["pageToken"] = page_token
+        if included_type is not None:
+            body["includedType"] = included_type
 
         try:
             response = httpx.post(

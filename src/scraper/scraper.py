@@ -1,29 +1,13 @@
-"""scraper: fetch pages and write raw HTML to disk.
+"""scraper: public re-exports for Phase 2 scraping stage.
 
-For each ``Source`` with status ``pending``:
-  1. HTTP GET the URL (with retry/backoff)
-  2. Write HTML to ``data/pages/<hash>.html``
-  3. Update ``Source.page_path``, ``status_code``, ``fetched_at``, ``status``
+Fetches pages for pending discovery hits, classifies them, extracts text,
+and persists results to disk (raw HTML + .txt) and PostgreSQL (metadata +
+extracted text).
 
-Raw HTML is never stored in PostgreSQL — only the file path.
-
-See docs/pipeline.md — Stage 2: Scraper.
+See ``runner.py`` for the main entry point.
 """
 from __future__ import annotations
 
+from src.scraper.runner import ScrapeSummary, run_scrape_for_campaign
 
-def scrape_source(source_id: str) -> None:
-    """Fetch and persist a single source by ID.
-
-    Not yet implemented.
-    """
-    raise NotImplementedError
-
-
-def scrape_pending(run_id: str, limit: int = 0) -> tuple[int, int]:
-    """Scrape all pending sources for a run.
-
-    Returns ``(succeeded, failed)``.
-    Not yet implemented.
-    """
-    raise NotImplementedError
+__all__ = ["run_scrape_for_campaign", "ScrapeSummary"]

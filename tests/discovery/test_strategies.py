@@ -274,3 +274,40 @@ def test_build_queries_center_radius_missing_center_lat_raises():
     )
     with pytest.raises(ValueError):
         build_queries(c)
+
+
+# ---------------------------------------------------------------------------
+# included_type — all four geo modes emit "dentist"
+# ---------------------------------------------------------------------------
+
+
+def test_build_queries_city_mode_included_type_is_dentist():
+    c = make_campaign(geo_method=GeoMethod.CITY, geo_city="London", geo_country="UK")
+    q = build_queries(c)[0]
+    assert q.included_type == "dentist"
+
+
+def test_build_queries_postal_code_mode_included_type_is_dentist():
+    c = make_campaign(geo_method=GeoMethod.POSTAL_CODE, geo_postal_code="SW1A 1AA")
+    q = build_queries(c)[0]
+    assert q.included_type == "dentist"
+
+
+def test_build_queries_bounding_box_mode_included_type_is_dentist():
+    c = make_campaign(
+        geo_method=GeoMethod.BOUNDING_BOX,
+        geo_sw_lat=51.4, geo_sw_lng=-0.3,
+        geo_ne_lat=51.6, geo_ne_lng=0.1,
+    )
+    q = build_queries(c)[0]
+    assert q.included_type == "dentist"
+
+
+def test_build_queries_center_radius_mode_included_type_is_dentist():
+    c = make_campaign(
+        geo_method=GeoMethod.CENTER_RADIUS,
+        geo_center_lat=51.5074, geo_center_lng=-0.1278,
+        geo_radius_m=5000,
+    )
+    q = build_queries(c)[0]
+    assert q.included_type == "dentist"

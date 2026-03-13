@@ -181,8 +181,13 @@ def _merge_fields(company: Company, result: PlaceResult) -> None:
 
 
 def _build_extra_fields(result: PlaceResult) -> dict:
-    """Build the extra_fields dict from a Places result."""
-    return {
+    """Build the extra_fields dict from a Places result.
+
+    Keys whose values are ``None`` are omitted so the JSONB column does not
+    accumulate ``null`` entries.  This keeps ``WHERE extra_fields->>'phone'
+    IS NOT NULL`` filters semantically correct and reduces noise.
+    """
+    raw = {
         "phone": result.phone_number,
         "rating": result.rating,
         "user_rating_count": result.user_rating_count,
@@ -193,3 +198,4 @@ def _build_extra_fields(result: PlaceResult) -> dict:
         "types": result.types,
         "country_code": result.country_code,
     }
+    return {k: v for k, v in raw.items() if v is not None}

@@ -16,6 +16,7 @@ from src.db.session import get_session
 from src.discovery.runner import run_discovery_for_campaign
 from src.models.campaign import Campaign
 from src.models.enums import CampaignStatus, GeoMethod
+from src.scraper.runner import ScrapeSummary, run_scrape_for_campaign
 
 app = typer.Typer(
     name="leads",
@@ -86,12 +87,17 @@ def create_campaign(
         if any(v is None for v in (sw_lat, sw_lng, ne_lat, ne_lng)):
             validation_error = "--sw-lat, --sw-lng, --ne-lat, --ne-lng are all required for bounding_box mode"
         elif sw_lat >= ne_lat or sw_lng >= ne_lng:  # type: ignore[operator]
-            console.print("[yellow]Warning: SW corner should be south-west of NE corner.[/yellow]")
+            validation_error = (
+                "--sw-lat must be less than --ne-lat and --sw-lng must be less than --ne-lng "
+                "(SW corner must be south-west of NE corner)"
+            )
     elif geo_method_enum == GeoMethod.CENTER_RADIUS:
         if any(v is None for v in (center_lat, center_lng, radius_m)):
             validation_error = "--center-lat, --center-lng, --radius-m are all required for center_radius mode"
         elif radius_m is not None and radius_m <= 0:
             validation_error = "--radius-m must be a positive integer"
+        elif radius_m is not None and radius_m > 50_000:
+            validation_error = "--radius-m must be ≤ 50,000 m (50 km — Places API maximum)"
 
     if validation_error:
         console.print(f"[red]Error: {validation_error}[/red]")
@@ -177,12 +183,38 @@ def run_discovery(
 
 @app.command()
 def scrape(
-    run_id: Optional[str] = typer.Option(None, "--run-id", help="Resume an existing run."),
-    limit: int = typer.Option(0, "--limit", help="Max sources to scrape (0 = unlimited)."),
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign whose pending hits to scrape.",
+    ),
 ) -> None:
-    """Fetch pages and save raw HTML to data/pages/."""
-    console.print("[yellow]scrape: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Fetch and persist pages for all pending discovery hits in a campaign.
+
+    For each pending hit the scraper fetches the company homepage, discovers
+    supplemental pages (About / Contact / Team), persists HTML to disk and
+    metadata + extracted text to PostgreSQL, then marks the hit as scraped.
+
+    Hits without a company website are marked as skipped.
+    Hits whose homepage fetch fails are marked as failed.
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]Running scrape for campaign {cid}...[/bold]\n")
+
+    try:
+        summary = run_scrape_for_campaign(cid)
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    _print_scrape_summary(summary)
+
+    if summary.errors > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -273,6 +305,34 @@ def _print_discovery_summary(summary: object) -> None:
     if summary.error_details:  # type: ignore[attr-defined]
         console.print("\n[red]Errors:[/red]")
         for detail in summary.error_details:  # type: ignore[attr-defined]
+            console.print(f"  - {detail}")
+    console.print()
+
+
+def _print_scrape_summary(summary: ScrapeSummary) -> None:
+    """Print a Rich table summarising a ``ScrapeSummary``."""
+    table = Table(title="Scrape complete", show_header=True, header_style="bold")
+    table.add_column("Metric", style="bold")
+    table.add_column("Count", justify="right")
+
+    rows = [
+        ("Hits scraped", summary.hits_scraped),
+        ("Hits skipped", summary.hits_skipped),
+        ("Hits failed", summary.hits_failed),
+        ("Pages saved (new)", summary.pages_saved),
+        ("Pages deduplicated", summary.pages_deduplicated),
+        ("Errors", summary.errors),
+    ]
+
+    for label, value in rows:
+        row_style = "red" if label in ("Hits failed", "Errors") and value > 0 else ""
+        table.add_row(label, str(value), style=row_style)
+
+    console.print(table)
+
+    if summary.error_details:
+        console.print("\n[red]Errors:[/red]")
+        for detail in summary.error_details:
             console.print(f"  - {detail}")
     console.print()
 

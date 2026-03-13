@@ -108,3 +108,19 @@ class SuppressionReason(str, enum.Enum):
     DO_NOT_CONTACT = "do_not_contact"
     COMPETITOR = "competitor"
     MANUAL = "manual"
+
+
+class PageType(str, enum.Enum):
+    """Classification of a scraped company page.
+
+    Maps 1-to-1 to the ``pagetype`` PostgreSQL enum type.
+    Priority order for supplemental page selection: ABOUT → CONTACT → TEAM,
+    then SERVICES/OTHER as fallbacks if a slot is still unfilled.
+    """
+
+    HOMEPAGE = "homepage"
+    ABOUT = "about"
+    CONTACT = "contact"
+    TEAM = "team"
+    SERVICES = "services"
+    OTHER = "other"
