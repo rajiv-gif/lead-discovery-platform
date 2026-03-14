@@ -121,9 +121,35 @@ Every pipeline execution creates a `Run` record that tracks:
 
 This allows replaying failed runs from the stage that failed.
 
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `leads create-campaign` | Create a new campaign with geo targeting |
+| `leads run-discovery` | Run Google Places discovery for a campaign |
+| `leads scrape` | Fetch and persist pages for pending discovery hits |
+| `leads extract` | Run deterministic + LLM extraction on scraped pages |
+| `leads verify` | Validate email, phone, and URL fields |
+| `leads score` | Compute lead quality scores |
+| `leads review` | Interactive human review (approve / reject / edit / skip) |
+| `leads export` | Export approved leads to three CSV files |
+| `leads run` | Run pipeline stages discover→score in one command |
+| `leads mark-contacted` | Transition a lead from QUALIFIED to CONTACTED |
+| `leads mark-converted` | Transition a lead from CONTACTED to CONVERTED |
+| `leads mark-churned` | Transition a lead from CONTACTED or CONVERTED to CHURNED |
+
+### Stage flow clarification
+
+`leads run` covers only the automated pipeline stages: **discover → scrape → extract → verify → score**.
+
+Review and export are **separate explicit actions** that require human involvement:
+- `leads review` — interactive review loop; must be run after scoring
+- `leads export` — produces timestamped CSV files from APPROVED leads; must be run after review
+
 ## Related Notes
 
 - [[architecture]] — module map and storage strategy
 - [[extraction-strategy]] — LLM prompting details
 - [[scoring-model]] — scoring criteria
 - [[database-schema]] — table definitions for Run, Source, Lead
+- [[export-design]] — export types, suppression rules, outreach tracking
