@@ -50,6 +50,18 @@ class Settings:
             os.getenv("SCRAPER_READ_TIMEOUT", "30.0")
         )
 
+        # --- Anthropic / Extraction ---
+        self.anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY")
+        self.extraction_model: str = os.getenv(
+            "EXTRACTION_MODEL", "claude-3-5-haiku-20241022"
+        )
+        self.extraction_max_tokens: int = int(
+            os.getenv("EXTRACTION_MAX_TOKENS", "1024")
+        )
+
+        # --- Export ---
+        self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
+
     @staticmethod
     def _require(key: str) -> str:
         value = os.getenv(key)

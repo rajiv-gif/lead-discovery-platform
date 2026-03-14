@@ -5,7 +5,9 @@ Run ``leads --help`` or ``leads <command> --help`` for usage.
 """
 from __future__ import annotations
 
+import json
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -14,9 +16,16 @@ from rich.table import Table
 
 from src.db.session import get_session
 from src.discovery.runner import run_discovery_for_campaign
+from src.export.runner import ExportSummary, run_export_for_campaign
+from src.extraction.runner import ExtractionSummary, run_extraction_for_campaign
 from src.models.campaign import Campaign
 from src.models.enums import CampaignStatus, GeoMethod
+from src.pipeline.runner import STAGES, PipelineSummary, run_pipeline
 from src.scraper.runner import ScrapeSummary, run_scrape_for_campaign
+from src.scoring.deriver import mark_contacted, mark_converted, mark_churned
+from src.verification.runner import VerificationSummary, run_verification_for_campaign
+from src.scoring.runner import ScoringRunSummary, run_scoring_for_campaign
+from src.review.runner import run_review_for_campaign as _run_review_for_campaign
 
 app = typer.Typer(
     name="leads",
@@ -219,60 +228,336 @@ def scrape(
 
 @app.command()
 def extract(
-    run_id: Optional[str] = typer.Option(None, "--run-id", help="Run ID to process."),
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign whose scraped hits to extract.",
+    ),
 ) -> None:
-    """Run LLM extraction on scraped pages."""
-    console.print("[yellow]extract: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Run extraction (deterministic + LLM) on scraped pages for a campaign.
+
+    For each SCRAPED discovery hit, extracts contacts, emails, and phones from
+    the company's persisted pages, then marks the hit as extracted.
+
+    If ANTHROPIC_API_KEY is set and deterministic extraction finds no contacts,
+    the LLM is invoked on the best available team/contact/about page.
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]Running extraction for campaign {cid}...[/bold]\n")
+
+    try:
+        summary = run_extraction_for_campaign(cid)
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    _print_extraction_summary(summary)
+
+    if summary.errors > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
 def verify(
-    run_id: Optional[str] = typer.Option(None, "--run-id", help="Run ID to process."),
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign to verify.",
+    ),
 ) -> None:
-    """Validate extracted lead fields (email, phone, URL)."""
-    console.print("[yellow]verify: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Validate extracted lead fields (email, phone, URL) for a campaign.
+
+    Email addresses are checked for format and MX record validity.
+    Phone numbers are classified by type (mobile / office / unknown).
+    Company websites are probed for HTTP reachability.
+
+    Website results are saved to data/website_checks/<campaign-id>.json
+    so the ``score`` command can consume them without a live network check.
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]Running verification for campaign {cid}...[/bold]\n")
+
+    try:
+        summary, website_results = run_verification_for_campaign(cid)
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    # Persist website results so score command can read them
+    checks_dir = Path("data/website_checks")
+    checks_dir.mkdir(parents=True, exist_ok=True)
+    checks_file = checks_dir / f"{cid}.json"
+    checks_file.write_text(
+        json.dumps({str(k): v for k, v in website_results.items()}, indent=2)
+    )
+
+    _print_verification_summary(summary)
+
+    if summary.errors > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
 def score(
-    run_id: Optional[str] = typer.Option(None, "--run-id", help="Run ID to process."),
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign to score.",
+    ),
 ) -> None:
-    """Score leads by quality."""
-    console.print("[yellow]score: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Score leads by quality for a campaign.
+
+    Loads website reachability results from data/website_checks/<campaign-id>.json
+    if available (produced by the ``verify`` command).
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    # Load website results if available
+    checks_file = Path("data/website_checks") / f"{cid}.json"
+    website_results: dict[uuid.UUID, bool] = {}
+    if checks_file.exists():
+        raw = json.loads(checks_file.read_text())
+        website_results = {uuid.UUID(k): v for k, v in raw.items()}
+
+    console.print(f"\n[bold]Running scoring for campaign {cid}...[/bold]\n")
+
+    try:
+        summary = run_scoring_for_campaign(cid, website_results=website_results)
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    _print_scoring_summary(summary)
+
+    if summary.errors > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
-def review() -> None:
-    """Interactive human review of scored leads (approve / reject / skip)."""
-    console.print("[yellow]review: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+def review(
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign to review.",
+    ),
+    min_score: float = typer.Option(
+        25.0, "--min-score",
+        help="Minimum score threshold for review queue.",
+    ),
+) -> None:
+    """Interactive human review of scored leads (approve / reject / edit / skip).
+
+    Only leads with review_status=PENDING and score >= min_score are shown,
+    ordered highest score first.
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]Starting review for campaign {cid} (min_score={min_score})...[/bold]\n")
+
+    try:
+        result = _run_review_for_campaign(cid, min_score=min_score)
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[bold]Review complete[/bold]")
+    console.print(f"  Reviewed:   {result.get('reviewed', 0)}")
+    console.print(f"  Approved:   {result.get('approved', 0)}")
+    console.print(f"  Rejected:   {result.get('rejected', 0)}")
+    console.print(f"  Needs edit: {result.get('needs_edit', 0)}")
+    console.print(f"  Skipped:    {result.get('skipped', 0)}\n")
 
 
 @app.command()
 def export(
-    output: str = typer.Option("leads.csv", "--output", "-o", help="Output file path."),
-    min_score: float = typer.Option(0.0, "--min-score", help="Minimum score to include."),
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign to export.",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None, "--output-dir",
+        help="Directory for CSV output. Defaults to data/exports.",
+    ),
+    only_uncontacted: bool = typer.Option(
+        False, "--only-uncontacted",
+        help="Exclude already-contacted leads.",
+    ),
+    include_converted: bool = typer.Option(
+        False, "--include-converted",
+        help="Include converted leads in export.",
+    ),
 ) -> None:
-    """Export approved leads to CSV."""
-    console.print("[yellow]export: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Export approved leads to CSV files (contacts, companies, leads views)."""
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    out_path = Path(output_dir) if output_dir else None
+
+    console.print(f"\n[bold]Exporting leads for campaign {cid}...[/bold]\n")
+
+    try:
+        summary = run_export_for_campaign(
+            cid,
+            export_dir=out_path,
+            only_uncontacted=only_uncontacted,
+            include_converted=include_converted,
+        )
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    _print_export_summary(summary)
+
+    if summary.errors > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
 def run(
-    input: str = typer.Argument(..., help="Path to a newline-delimited file of seed URLs."),
-    from_stage: Optional[str] = typer.Option(
-        None,
-        "--from-stage",
-        help="Resume pipeline from a specific stage: scrape|extract|verify|score|review|export",
+    campaign_id: str = typer.Option(
+        ..., "--campaign-id", "-c",
+        help="UUID of the campaign to run.",
+    ),
+    from_stage: str = typer.Option(
+        "discover", "--from-stage",
+        help=f"Start from this stage: {', '.join(STAGES)}",
+    ),
+    to_stage: str = typer.Option(
+        "score", "--to-stage",
+        help=f"Stop after this stage: {', '.join(STAGES)}",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run",
+        help="Print what would be done without executing.",
     ),
 ) -> None:
-    """Run the full pipeline end-to-end."""
-    console.print("[yellow]run: not yet implemented[/yellow]")
-    raise typer.Exit(1)
+    """Run pipeline stages (discover → score) for a campaign.
+
+    Review and export are separate explicit actions not included in 'run'.
+    """
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        console.print(f"[red]Error: {campaign_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    if from_stage not in STAGES:
+        valid = ", ".join(STAGES)
+        console.print(f"[red]Error: invalid --from-stage {from_stage!r}. Valid: {valid}[/red]")
+        raise typer.Exit(1)
+
+    if to_stage not in STAGES:
+        valid = ", ".join(STAGES)
+        console.print(f"[red]Error: invalid --to-stage {to_stage!r}. Valid: {valid}[/red]")
+        raise typer.Exit(1)
+
+    label = "[dim](dry run)[/dim]" if dry_run else ""
+    console.print(f"\n[bold]Running pipeline {from_stage}→{to_stage} for campaign {cid} {label}[/bold]\n")
+
+    try:
+        pipeline_summary = run_pipeline(
+            cid,
+            from_stage=from_stage,
+            to_stage=to_stage,
+            dry_run=dry_run,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(1)
+
+    _print_pipeline_summary(pipeline_summary)
+
+    if pipeline_summary.total_errors > 0:
+        raise typer.Exit(1)
+
+
+@app.command()
+def mark_contacted(
+    lead_id: str = typer.Option(
+        ..., "--lead-id",
+        help="UUID of the lead to mark as contacted.",
+    ),
+) -> None:
+    """Mark a lead as CONTACTED (from QUALIFIED)."""
+    try:
+        lid = uuid.UUID(lead_id)
+    except ValueError:
+        console.print(f"[red]Error: {lead_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    with get_session() as session:
+        try:
+            lead = mark_contacted(session, lid)
+        except ValueError as exc:
+            console.print(f"[red]Error: {exc}[/red]")
+            raise typer.Exit(1)
+
+    console.print(f"[green]Lead {lid} marked as CONTACTED.[/green]")
+
+
+@app.command()
+def mark_converted(
+    lead_id: str = typer.Option(
+        ..., "--lead-id",
+        help="UUID of the lead to mark as converted.",
+    ),
+) -> None:
+    """Mark a lead as CONVERTED (from CONTACTED)."""
+    try:
+        lid = uuid.UUID(lead_id)
+    except ValueError:
+        console.print(f"[red]Error: {lead_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    with get_session() as session:
+        try:
+            lead = mark_converted(session, lid)
+        except ValueError as exc:
+            console.print(f"[red]Error: {exc}[/red]")
+            raise typer.Exit(1)
+
+    console.print(f"[green]Lead {lid} marked as CONVERTED.[/green]")
+
+
+@app.command()
+def mark_churned(
+    lead_id: str = typer.Option(
+        ..., "--lead-id",
+        help="UUID of the lead to mark as churned.",
+    ),
+) -> None:
+    """Mark a lead as CHURNED (from CONTACTED or CONVERTED)."""
+    try:
+        lid = uuid.UUID(lead_id)
+    except ValueError:
+        console.print(f"[red]Error: {lead_id!r} is not a valid UUID[/red]")
+        raise typer.Exit(1)
+
+    with get_session() as session:
+        try:
+            lead = mark_churned(session, lid)
+        except ValueError as exc:
+            console.print(f"[red]Error: {exc}[/red]")
+            raise typer.Exit(1)
+
+    console.print(f"[green]Lead {lid} marked as CHURNED.[/green]")
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +620,145 @@ def _print_scrape_summary(summary: ScrapeSummary) -> None:
         for detail in summary.error_details:
             console.print(f"  - {detail}")
     console.print()
+
+
+def _print_extraction_summary(summary: ExtractionSummary) -> None:
+    """Print a Rich table summarising an ``ExtractionSummary``."""
+    table = Table(title="Extraction complete", show_header=True, header_style="bold")
+    table.add_column("Metric", style="bold")
+    table.add_column("Count", justify="right")
+
+    rows = [
+        ("Hits processed", summary.hits_processed),
+        ("Hits with data", summary.hits_with_data),
+        ("Hits with zero data", summary.hits_zero_data),
+        ("Hits failed", summary.hits_failed),
+        ("Hits skipped", summary.hits_skipped),
+        ("Contacts created", summary.contacts_created),
+        ("Emails created", summary.emails_created),
+        ("Phones created", summary.phones_created),
+        ("Errors", summary.errors),
+    ]
+
+    for label, value in rows:
+        row_style = "red" if label in ("Hits failed", "Errors") and value > 0 else ""
+        table.add_row(label, str(value), style=row_style)
+
+    console.print(table)
+
+    if summary.error_details:
+        console.print("\n[red]Errors:[/red]")
+        for detail in summary.error_details:
+            console.print(f"  - {detail}")
+    console.print()
+
+
+def _print_verification_summary(summary: VerificationSummary) -> None:
+    """Print a Rich table summarising a :class:`VerificationSummary`."""
+    table = Table(title="Verification complete", show_header=True, header_style="bold")
+    table.add_column("Metric", style="bold")
+    table.add_column("Count", justify="right")
+
+    rows = [
+        ("Emails verified", summary.emails_verified),
+        ("Emails valid", summary.emails_valid),
+        ("Emails invalid", summary.emails_invalid),
+        ("Emails risky", summary.emails_risky),
+        ("Phones classified", summary.phones_classified),
+        ("Websites checked", summary.websites_checked),
+        ("Websites reachable", summary.websites_reachable),
+        ("Errors", summary.errors),
+    ]
+
+    for label, value in rows:
+        row_style = "red" if label == "Errors" and value > 0 else ""
+        table.add_row(label, str(value), style=row_style)
+
+    console.print(table)
+
+    if summary.error_details:
+        console.print("\n[red]Errors:[/red]")
+        for detail in summary.error_details:
+            console.print(f"  - {detail}")
+    console.print()
+
+
+def _print_scoring_summary(summary: ScoringRunSummary) -> None:
+    """Print a Rich table summarising a :class:`ScoringRunSummary`."""
+    table = Table(title="Scoring complete", show_header=True, header_style="bold")
+    table.add_column("Metric", style="bold")
+    table.add_column("Count", justify="right")
+
+    rows = [
+        ("Companies processed", summary.companies_processed),
+        ("Leads created", summary.leads_created),
+        ("Leads updated", summary.leads_updated),
+        ("Leads disqualified", summary.leads_disqualified),
+        ("Hot", summary.hot),
+        ("Warm", summary.warm),
+        ("Cold", summary.cold),
+        ("Errors", summary.errors),
+    ]
+
+    for label, value in rows:
+        row_style = "red" if label == "Errors" and value > 0 else ""
+        table.add_row(label, str(value), style=row_style)
+
+    console.print(table)
+
+    if summary.error_details:
+        console.print("\n[red]Errors:[/red]")
+        for detail in summary.error_details:
+            console.print(f"  - {detail}")
+    console.print()
+
+
+def _print_export_summary(summary: ExportSummary) -> None:
+    """Print a Rich table summarising an :class:`ExportSummary`."""
+    table = Table(title="Export complete", show_header=True, header_style="bold")
+    table.add_column("File", style="bold")
+    table.add_column("Rows", justify="right")
+
+    table.add_row("Contacts (named)", str(summary.contacts_rows))
+    table.add_row("Companies (fallback)", str(summary.companies_rows))
+    table.add_row("Leads (full view)", str(summary.leads_rows))
+
+    console.print(table)
+
+    if summary.contacts_file:
+        console.print(f"  Contacts:  {summary.contacts_file}")
+    if summary.companies_file:
+        console.print(f"  Companies: {summary.companies_file}")
+    if summary.leads_file:
+        console.print(f"  Leads:     {summary.leads_file}")
+
+    if summary.errors > 0:
+        console.print(f"\n[red]Errors ({summary.errors}):[/red]")
+        for detail in summary.error_details:
+            console.print(f"  - {detail}")
+    console.print()
+
+
+def _print_pipeline_summary(summary: PipelineSummary) -> None:
+    """Print a Rich summary for a :class:`PipelineSummary`."""
+    from rich.panel import Panel
+
+    for stage, ss in summary.stage_summaries.items():
+        lines = [
+            f"processed={ss.processed}  succeeded={ss.succeeded}  "
+            f"failed={ss.failed}  skipped={ss.skipped}",
+        ]
+        if ss.errors:
+            for err in ss.errors:
+                lines.append(f"  [red]ERROR: {err}[/red]")
+        style = "red" if ss.errors else "green"
+        console.print(Panel("\n".join(lines), title=f"Stage: {stage}", style=style, expand=False))
+
+    console.print(
+        f"\n[bold]Pipeline complete.[/bold]  "
+        f"Total errors: [{'red' if summary.total_errors else 'green'}]"
+        f"{summary.total_errors}[/{'red' if summary.total_errors else 'green'}]\n"
+    )
 
 
 if __name__ == "__main__":

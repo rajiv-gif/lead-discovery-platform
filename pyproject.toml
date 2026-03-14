@@ -19,6 +19,8 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "trafilatura>=1.12",
     "lxml>=5.0",
+    "phonenumbers>=8.13",
+    "anthropic>=0.25",
 ]
 
 [project.optional-dependencies]
