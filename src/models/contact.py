@@ -41,6 +41,11 @@ class Contact(UUIDPrimaryKey, TimestampMixin, Base):
     linkedin_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Where we found this contact (e.g. "company_page", "linkedin")
     source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Lowercased, honorific-stripped, punctuation-stripped name key.
+    # Used for cross-run dedup — see Phase 4.1 migration.
+    normalized_name_key: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, index=True
+    )
     extra_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     company: Mapped[Company] = relationship("Company", back_populates="contacts")
