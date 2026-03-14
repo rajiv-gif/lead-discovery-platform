@@ -15,9 +15,11 @@ venv/
 .env
 .env.local
 
-# Data (raw HTML and LLM artifacts stay local)
+# Data (runtime artifacts stay local — never commit)
 data/pages/
 data/llm_runs/
+data/website_checks/
+data/exports/
 
 # Database
 *.db
