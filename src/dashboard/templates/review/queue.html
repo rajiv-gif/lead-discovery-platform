@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Review — {{ campaign.name }} — Lead Discovery{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem">
+  <h2>Review queue</h2>
+  <span>{{ lead_data | length }} leads</span>
+</div>
+
+<p style="color:var(--pico-muted-color); margin-bottom:1rem">
+  {{ campaign.name }} · Showing leads with score ≥ {{ min_score }}
+</p>
+
+<!-- Min-score filter -->
+<form method="get" action="/campaigns/{{ campaign.id }}/review"
+      style="display:flex; gap:.5rem; align-items:flex-end; margin-bottom:1.5rem">
+  <div>
+    <label for="min_score" style="margin-bottom:.25rem">Min score</label>
+    <input type="number" id="min_score" name="min_score"
+           value="{{ min_score }}" min="0" max="100" step="1"
+           style="width:6rem; margin:0">
+  </div>
+  <button type="submit" class="secondary" style="margin:0">Filter</button>
+</form>
+
+{% if not lead_data %}
+<p>No pending leads above score {{ min_score }}. Either all leads have been reviewed
+   or the score threshold is too high.</p>
+{% endif %}
+
+{% for ld in lead_data %}
+<article id="lead-{{ ld.lead.id }}" class="lead-card">
+  <header style="display:flex; justify-content:space-between; align-items:flex-start">
+    <div>
+      <strong>{{ ld.company.name }}</strong>
+      {% if ld.company.city %}<small> · {{ ld.company.city }}</small>{% endif %}
+    </div>
+    <div style="text-align:right">
+      <span class="badge badge-{{ ld.lead.score_band.value if ld.lead.score_band else 'cold' }}">
+        {{ ld.lead.score_band.value if ld.lead.score_band else '—' }}
+      </span>
+      <br>
+      <small>Score: {{ "%.1f"|format(ld.lead.score) if ld.lead.score else '—' }}</small>
+    </div>
+  </header>
+
+  {% if ld.contacts %}
+  <ul style="margin:.5rem 0; padding-left:1.2rem">
+    {% for contact in ld.contacts %}
+    <li>
+      {{ contact.full_name or ((contact.first_name or '') + ' ' + (contact.last_name or '')) | trim or '—' }}
+      {% if contact.title %}<em>({{ contact.title }})</em>{% endif %}
+      {% if ld.contact_emails.get(contact.id) %}
+      — <a href="mailto:{{ ld.contact_emails[contact.id].address }}">
+          {{ ld.contact_emails[contact.id].address }}</a>
+        <small>[{{ ld.contact_emails[contact.id].status.value }}]</small>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if ld.company_emails %}
+  <p style="margin:.25rem 0; font-size:.9em; color:var(--pico-muted-color)">
+    📧
+    {% for e in ld.company_emails %}
+    {{ e.address }}{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  {% if ld.company_phones %}
+  <p style="margin:.25rem 0; font-size:.9em; color:var(--pico-muted-color)">
+    📞
+    {% for p in ld.company_phones %}
+    {{ p.number }}{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  {% if ld.company.website %}
+  <p style="margin:.25rem 0; font-size:.85em">
+    <a href="{{ ld.company.website }}" target="_blank" rel="noopener">{{ ld.company.website }}</a>
+  </p>
+  {% endif %}
+
+  <footer style="display:flex; gap:.5rem; margin-top:.75rem">
+    <button
+      hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/approve"
+      hx-target="closest article"
+      hx-swap="outerHTML"
+      style="background:var(--pico-ins-color,#4ade80); border-color:transparent; color:#fff">
+      ✓ Approve
+    </button>
+    <button
+      hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/reject"
+      hx-target="closest article"
+      hx-swap="outerHTML"
+      class="secondary"
+      style="background:var(--pico-del-color,#f87171); border-color:transparent; color:#fff">
+      ✗ Reject
+    </button>
+    <button
+      hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/needs-edit"
+      hx-target="closest article"
+      hx-swap="outerHTML"
+      class="secondary">
+      ✎ Needs edit
+    </button>
+  </footer>
+</article>
+{% endfor %}
+
+<p style="margin-top:2rem">
+  <a href="/campaigns/{{ campaign.id }}">← Back to campaign</a>
+</p>
+{% endblock %}

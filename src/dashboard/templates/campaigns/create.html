@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}New Campaign — Lead Discovery{% endblock %}
+
+{% block content %}
+<h2>New campaign</h2>
+
+{% if error %}
+<div class="error-banner">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/campaigns/new">
+
+  <label for="name">Campaign name *</label>
+  <input type="text" id="name" name="name" required
+         value="{{ form.name if form else '' }}"
+         placeholder="e.g. London Dentists Q1">
+
+  <label for="specialty">Specialty</label>
+  <input type="text" id="specialty" name="specialty"
+         value="{{ form.specialty if form else 'dentists' }}"
+         placeholder="e.g. dentists, physiotherapists">
+
+  <label for="description">Description</label>
+  <input type="text" id="description" name="description"
+         value="{{ form.description if form else '' }}">
+
+  <label for="geo_method">Geo method *</label>
+  <select id="geo_method" name="geo_method" onchange="updateGeoFields()">
+    {% for m in geo_methods %}
+    <option value="{{ m }}"
+      {% if form and form.geo_method == m %}selected{% endif %}>
+      {{ m }}
+    </option>
+    {% endfor %}
+  </select>
+
+  <!-- City / country fields -->
+  <div id="fields_city">
+    <div class="grid">
+      <div>
+        <label for="city">City *</label>
+        <input type="text" id="city" name="city"
+               value="{{ form.city if form else '' }}"
+               placeholder="e.g. London">
+      </div>
+      <div>
+        <label for="country">Country *</label>
+        <input type="text" id="country" name="country"
+               value="{{ form.country if form else '' }}"
+               placeholder="e.g. UK">
+      </div>
+    </div>
+  </div>
+
+  <!-- Postal code -->
+  <div id="fields_postal_code" style="display:none">
+    <label for="postal_code">Postal code *</label>
+    <input type="text" id="postal_code" name="postal_code"
+           value="{{ form.postal_code if form else '' }}"
+           placeholder="e.g. SW1A1AA">
+  </div>
+
+  <!-- Bounding box -->
+  <div id="fields_bounding_box" style="display:none">
+    <p><small>South-west corner (bottom-left) and north-east corner (top-right).</small></p>
+    <div class="grid">
+      <div>
+        <label for="sw_lat">SW latitude *</label>
+        <input type="number" step="any" id="sw_lat" name="sw_lat"
+               value="{{ form.sw_lat if form else '' }}">
+      </div>
+      <div>
+        <label for="sw_lng">SW longitude *</label>
+        <input type="number" step="any" id="sw_lng" name="sw_lng"
+               value="{{ form.sw_lng if form else '' }}">
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label for="ne_lat">NE latitude *</label>
+        <input type="number" step="any" id="ne_lat" name="ne_lat"
+               value="{{ form.ne_lat if form else '' }}">
+      </div>
+      <div>
+        <label for="ne_lng">NE longitude *</label>
+        <input type="number" step="any" id="ne_lng" name="ne_lng"
+               value="{{ form.ne_lng if form else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Center radius -->
+  <div id="fields_center_radius" style="display:none">
+    <div class="grid">
+      <div>
+        <label for="center_lat">Centre latitude *</label>
+        <input type="number" step="any" id="center_lat" name="center_lat"
+               value="{{ form.center_lat if form else '' }}">
+      </div>
+      <div>
+        <label for="center_lng">Centre longitude *</label>
+        <input type="number" step="any" id="center_lng" name="center_lng"
+               value="{{ form.center_lng if form else '' }}">
+      </div>
+    </div>
+    <label for="radius_m">Radius (metres, max 50 000) *</label>
+    <input type="number" id="radius_m" name="radius_m" min="1" max="50000"
+           value="{{ form.radius_m if form else '' }}"
+           placeholder="e.g. 5000">
+  </div>
+
+  <div style="margin-top:1.5rem; display:flex; gap:1rem">
+    <button type="submit">Create campaign</button>
+    <a href="/" role="button" class="secondary">Cancel</a>
+  </div>
+</form>
+
+<script>
+  const GEO_METHODS = ["city", "postal_code", "bounding_box", "center_radius"];
+  function updateGeoFields() {
+    const method = document.getElementById("geo_method").value;
+    GEO_METHODS.forEach(function(m) {
+      const el = document.getElementById("fields_" + m);
+      if (el) el.style.display = (m === method) ? "" : "none";
+    });
+  }
+  document.addEventListener("DOMContentLoaded", updateGeoFields);
+</script>
+{% endblock %}

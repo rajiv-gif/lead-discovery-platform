@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Export — {{ campaign.name }} — Lead Discovery{% endblock %}
+
+{% block content %}
+<h2>Export — {{ campaign.name }}</h2>
+
+<!-- Lead summary bar -->
+<div style="margin-bottom:1.5rem; padding:1rem; background:var(--pico-card-background-color); border-radius:var(--pico-border-radius)">
+  <strong>Approved leads: {{ lead_summary.total }}</strong>
+  <span style="color:var(--pico-muted-color); margin-left:1rem">
+    Qualified: {{ lead_summary.qualified }} ·
+    Contacted: {{ lead_summary.contacted }} ·
+    Converted: {{ lead_summary.converted }}
+  </span>
+</div>
+
+{% if error %}
+<div class="error-banner">Export failed: {{ error }}</div>
+{% endif %}
+
+{% if generated %}
+<div class="success-banner">
+  Export complete.
+  {% if generated.contacts_rows is not none %}
+  <br>Named contacts: {{ generated.contacts_rows }} rows.
+  {% endif %}
+  {% if generated.companies_rows is not none %}
+  Company fallback: {{ generated.companies_rows }} rows.
+  {% endif %}
+  {% if generated.leads_rows is not none %}
+  Full leads: {{ generated.leads_rows }} rows.
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Generate button -->
+{% if lead_summary.total > 0 %}
+<form method="post" action="/campaigns/{{ campaign.id }}/export/generate" style="margin-bottom:2rem">
+  <button type="submit">⬇ Generate CSVs (all three files)</button>
+</form>
+{% else %}
+<p><em>No approved leads to export yet. Approve leads in the review queue first.</em></p>
+{% endif %}
+
+<!-- Previous exports -->
+{% if previous %}
+<h3>Previous exports</h3>
+<figure>
+  <table>
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Size</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in previous %}
+      <tr>
+        <td><code>{{ f.name }}</code></td>
+        <td>{{ f.size_kb }} KB</td>
+        <td>
+          <a href="/campaigns/{{ campaign.id }}/export/download?file={{ f.name }}">
+            ↓ Download
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</figure>
+{% else %}
+<p style="color:var(--pico-muted-color)">No exports yet for this campaign.</p>
+{% endif %}
+
+<p style="margin-top:2rem">
+  <a href="/campaigns/{{ campaign.id }}">← Back to campaign</a>
+</p>
+{% endblock %}

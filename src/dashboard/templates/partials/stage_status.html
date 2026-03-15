@@ -1,0 +1,65 @@
+{#
+  Stage status partial — returned both on initial page load (via include)
+  and as the HTMX swap target for run-button responses and polling.
+
+  When a task is running, a hidden <span> triggers a poll every 3 s by
+  re-fetching this partial. When idle, the span is absent and polling stops.
+#}
+
+{% if task_running %}
+<span
+  hx-get="/campaigns/{{ campaign_id }}/status"
+  hx-trigger="load delay:3s"
+  hx-target="#stage-status"
+  hx-swap="innerHTML"
+  aria-hidden="true">
+</span>
+{% endif %}
+
+{% if task_error %}
+<div class="error-banner">
+  Last stage <strong>{{ active_stage or 'unknown' }}</strong> failed:
+  {{ task_error }}
+</div>
+{% endif %}
+
+<figure>
+  <table class="stage-table">
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Status</th>
+        <th style="text-align:right">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in stage_rows %}
+      <tr>
+        <td>
+          {% if active_stage == row.key %}
+          <span class="running-indicator">⏳</span>
+          {% endif %}
+          {{ row.label }}
+        </td>
+        <td>
+          {% if active_stage == row.key %}
+          <em>Running…</em>
+          {% else %}
+          {{ row.detail }}
+          {% endif %}
+        </td>
+        <td>
+          <button
+            hx-post="/campaigns/{{ campaign_id }}/run/{{ row.key }}"
+            hx-target="#stage-status"
+            hx-swap="innerHTML"
+            hx-indicator="#stage-status"
+            {% if task_running %}disabled aria-busy="false"{% endif %}>
+            {% if active_stage == row.key %}Running…{% else %}Run ▶{% endif %}
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</figure>

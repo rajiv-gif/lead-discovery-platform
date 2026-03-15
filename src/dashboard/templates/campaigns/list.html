@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Lead Discovery{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+  <h2>Campaigns</h2>
+  <a href="/campaigns/new" role="button">+ New campaign</a>
+</div>
+
+{% if campaigns %}
+<figure>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Specialty</th>
+        <th>Geo method</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in campaigns %}
+      <tr>
+        <td><strong>{{ c.name }}</strong></td>
+        <td>{{ c.specialty }}</td>
+        <td>{{ c.geo_method.value }}</td>
+        <td>
+          <span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span>
+        </td>
+        <td>{{ c.created_at.strftime("%Y-%m-%d") if c.created_at else "—" }}</td>
+        <td><a href="/campaigns/{{ c.id }}">View →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</figure>
+{% else %}
+<p>No campaigns yet. <a href="/campaigns/new">Create your first campaign</a>.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — Lead Discovery{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem">
+  <h2>{{ campaign.name }}</h2>
+  <span class="badge badge-{{ campaign.status.value }}">{{ campaign.status.value }}</span>
+</div>
+<p style="color:var(--pico-muted-color); margin-bottom:1.5rem">
+  {{ campaign.specialty }} · {{ campaign.geo_method.value }}
+  {% if campaign.geo_city %} · {{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}{% endif %}
+</p>
+
+<!-- Stage status table (HTMX swap target) -->
+<div id="stage-status">
+  {% include "partials/stage_status.html" %}
+</div>
+
+<!-- Navigation links -->
+<div style="display:flex; gap:1rem; margin-top:1.5rem">
+  {% if counts.total_leads > 0 %}
+  <a href="/campaigns/{{ campaign.id }}/review" role="button" class="secondary">
+    Review leads ({{ counts.pending_review }} pending)
+  </a>
+  {% else %}
+  <button disabled class="secondary" title="Run pipeline stages first">
+    Review leads
+  </button>
+  {% endif %}
+
+  <a href="/campaigns/{{ campaign.id }}/export" role="button" class="secondary">
+    Export →
+  </a>
+</div>
+
+<p style="margin-top:2rem">
+  <a href="/">← All campaigns</a>
+</p>
+{% endblock %}

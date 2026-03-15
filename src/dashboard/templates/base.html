@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lead Discovery{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <style>
+    nav { border-bottom: 1px solid var(--pico-muted-border-color); margin-bottom: 1.5rem; }
+    .badge {
+      display: inline-block;
+      padding: .1em .5em;
+      border-radius: var(--pico-border-radius);
+      font-size: .8em;
+      font-weight: 600;
+    }
+    .badge-hot  { background: #fee2e2; color: #991b1b; }
+    .badge-warm { background: #fef3c7; color: #92400e; }
+    .badge-cold { background: #dbeafe; color: #1e40af; }
+    .badge-disqualified { background: #f3f4f6; color: #6b7280; }
+    .badge-draft     { background: #f3f4f6; color: #6b7280; }
+    .badge-active    { background: #d1fae5; color: #065f46; }
+    .badge-approved  { background: #d1fae5; color: #065f46; }
+    .badge-rejected  { background: #fee2e2; color: #991b1b; }
+    .badge-needs_edit{ background: #fef3c7; color: #92400e; }
+    .badge-pending   { background: #e0e7ff; color: #3730a3; }
+    .running-indicator { animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .error-banner { background: #fee2e2; color: #991b1b; padding: .75rem 1rem; border-radius: var(--pico-border-radius); margin-bottom: 1rem; }
+    .success-banner { background: #d1fae5; color: #065f46; padding: .75rem 1rem; border-radius: var(--pico-border-radius); margin-bottom: 1rem; }
+    .lead-card { margin-bottom: 1rem; }
+    .lead-card--approved, .lead-card--rejected { transition: opacity 0.3s; }
+    .stage-table td:last-child { text-align: right; }
+    .stage-table td:last-child button { margin: 0; padding: .3em .8em; font-size: .9em; }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/" style="text-decoration:none">📋 Lead Discovery</a></strong></li>
+      </ul>
+      <ul>
+        <li><a href="/">Campaigns</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
