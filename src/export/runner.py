@@ -170,8 +170,9 @@ def run_export_for_campaign(
             log.error("Full leads formatter error: %s", exc, exc_info=True)
             lead_rows = []
 
-        # Write CSVs
-        ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+        # Write CSVs — millisecond precision prevents same-second overwrites
+        _now = datetime.now(tz=timezone.utc)
+        ts = _now.strftime("%Y%m%d_%H%M%S_") + f"{_now.microsecond // 1000:03d}"
         out_dir = export_dir / str(campaign_id)
 
         contacts_path = out_dir / f"contacts_{ts}.csv"

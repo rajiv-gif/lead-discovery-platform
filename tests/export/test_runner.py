@@ -113,9 +113,16 @@ def test_creates_all_three_files(tmp_path):
     assert Path(summary.leads_file).exists()
 
 
-def test_timestamped_paths_differ_on_two_runs(tmp_path):
-    """Two successive runs should produce different file paths (different timestamps)."""
-    import time
+def test_rapid_reruns_produce_unique_filenames_and_do_not_overwrite(tmp_path):
+    """Two back-to-back export runs must produce distinct filenames.
+
+    Both output files must exist after the second run — proving neither
+    overwrote the other.  No sleep is required; millisecond-precision
+    timestamps make same-second collisions negligible, and we pin the
+    clock via patch to guarantee the test is deterministic.
+    """
+    from datetime import datetime, timezone
+    from unittest.mock import call
 
     campaign_id = uuid.uuid4()
     company_id = uuid.uuid4()
@@ -125,18 +132,32 @@ def test_timestamped_paths_differ_on_two_runs(tmp_path):
     company = _make_company(company_id)
     lead = _make_lead(company_id=company_id, campaign_id=campaign_id)
 
+    # Two instants 5 ms apart — well within the same second
+    t1 = datetime(2026, 3, 15, 12, 0, 0, 100_000, tzinfo=timezone.utc)  # …_100
+    t2 = datetime(2026, 3, 15, 12, 0, 0, 105_000, tzinfo=timezone.utc)  # …_105
+
     session1 = _make_session(campaign, [lead], company)
     session2 = _make_session(campaign, [lead], company)
 
-    with patch("src.export.runner.get_session", return_value=_mock_get_session(session1)):
-        summary1 = run_export_for_campaign(campaign_id, export_dir=tmp_path)
+    with patch("src.export.runner.datetime") as mock_dt:
+        mock_dt.now.return_value = t1
+        with patch("src.export.runner.get_session", return_value=_mock_get_session(session1)):
+            summary1 = run_export_for_campaign(campaign_id, export_dir=tmp_path)
 
-    time.sleep(1.1)
+        mock_dt.now.return_value = t2
+        with patch("src.export.runner.get_session", return_value=_mock_get_session(session2)):
+            summary2 = run_export_for_campaign(campaign_id, export_dir=tmp_path)
 
-    with patch("src.export.runner.get_session", return_value=_mock_get_session(session2)):
-        summary2 = run_export_for_campaign(campaign_id, export_dir=tmp_path)
-
+    # Filenames must differ
     assert summary1.contacts_file != summary2.contacts_file
+    assert summary1.companies_file != summary2.companies_file
+    assert summary1.leads_file != summary2.leads_file
+
+    # Both files must still exist — second run did not overwrite first
+    assert Path(summary1.contacts_file).exists()
+    assert Path(summary2.contacts_file).exists()
+    assert Path(summary1.leads_file).exists()
+    assert Path(summary2.leads_file).exists()
 
 
 def test_only_uncontacted_flag_queries_correct_statuses(tmp_path):
