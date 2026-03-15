@@ -10,6 +10,7 @@ from src.models.phone import Phone
 from src.models.company_lead import CompanyLead
 from src.models.audit_log import AuditLog
 from src.models.suppression_list import SuppressionList
+from src.models.pipeline_run import PipelineRun
 
 __all__ = [
     "Campaign",
@@ -22,4 +23,5 @@ __all__ = [
     "CompanyLead",
     "AuditLog",
     "SuppressionList",
+    "PipelineRun",
 ]

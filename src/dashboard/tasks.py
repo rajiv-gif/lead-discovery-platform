@@ -81,6 +81,8 @@ class TaskRegistry:
         stage: str,
         fn: Callable,
         *args: Any,
+        on_start: Optional[Callable[[uuid.UUID, "TaskEntry"], None]] = None,
+        on_finish: Optional[Callable[[uuid.UUID, "TaskEntry"], None]] = None,
     ) -> TaskEntry:
         """Dispatch *fn(*args)* in a thread and register the resulting task.
 
@@ -89,6 +91,12 @@ class TaskRegistry:
             stage: Human-readable stage name (e.g. ``"scrape"``).
             fn: Blocking callable to run (a pipeline runner function).
             *args: Positional arguments forwarded to *fn*.
+            on_start: Optional hook called immediately after the entry is created.
+                Receives ``(campaign_id, entry)``. Runs in the async event loop.
+                Use for DB persistence, metrics, etc.
+            on_finish: Optional hook called inside the done callback, after
+                ``entry.finished_at`` and ``entry.error`` are set.
+                Receives ``(campaign_id, entry)``. Runs in the async event loop.
 
         Returns:
             The new ``TaskEntry``.
@@ -111,6 +119,12 @@ class TaskRegistry:
         )
         self._tasks[campaign_id] = entry
 
+        if on_start is not None:
+            try:
+                on_start(campaign_id, entry)
+            except Exception:
+                log.exception("on_start hook failed for campaign %s stage %r", campaign_id, stage)
+
         def _on_done(t: asyncio.Task) -> None:
             entry.finished_at = datetime.now(tz=timezone.utc)
             elapsed = entry.elapsed_seconds
@@ -131,6 +145,13 @@ class TaskRegistry:
                     "Pipeline stage %r for campaign %s completed in %.1fs",
                     stage, campaign_id, elapsed,
                 )
+            if on_finish is not None:
+                try:
+                    on_finish(campaign_id, entry)
+                except Exception:
+                    log.exception(
+                        "on_finish hook failed for campaign %s stage %r", campaign_id, stage
+                    )
 
         task.add_done_callback(_on_done)
         return entry
