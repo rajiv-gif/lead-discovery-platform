@@ -16,6 +16,31 @@ from src.models.enums import DiscoveryHitStatus, EmailStatus, ReviewStatus
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+# Per-stage hint strings shown alongside error messages in the UI.
+# Kept here so they are easy to update without touching route code.
+STAGE_ERROR_HINTS: dict[str, str] = {
+    "discover": (
+        "Check GOOGLE_PLACES_API_KEY is set and the query returned results. "
+        "Try narrowing the specialty or city."
+    ),
+    "scrape": (
+        "Check network connectivity and SCRAPER_RATE_LIMIT_DELAY. "
+        "Some sites block automated requests — the scraper will skip them and continue."
+    ),
+    "extract": (
+        "Check ANTHROPIC_API_KEY and EXTRACTION_MODEL are correct. "
+        "Verify the model name matches an available Claude model."
+    ),
+    "verify": (
+        "Email verification is best-effort — partial failures are normal. "
+        "Check logs for repeated DNS errors."
+    ),
+    "score": (
+        "Scoring requires extracted leads. Run the extract stage first, "
+        "then re-run score."
+    ),
+}
+
 
 def get_stage_counts(session: Session, campaign_id: uuid.UUID) -> dict:
     """Return a dict of stage-level counts for a campaign's detail page.

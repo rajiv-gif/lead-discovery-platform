@@ -16,7 +16,7 @@ the ground truth; page counts are read live from the database.
 from __future__ import annotations
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.dashboard.routes import campaigns, detail, export, pipeline, review, status
 
@@ -37,6 +37,19 @@ app.include_router(pipeline.router)
 app.include_router(status.router)
 app.include_router(review.router)
 app.include_router(export.router)
+
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+@app.get("/healthz", response_class=JSONResponse, include_in_schema=False)
+async def healthz() -> JSONResponse:
+    """Lightweight liveness probe — returns 200 if the process is alive.
+
+    Does not check DB connectivity; use ``leads db check`` for that.
+    """
+    return JSONResponse({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------

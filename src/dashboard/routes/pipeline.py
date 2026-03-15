@@ -12,7 +12,8 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from src.dashboard.deps import get_stage_counts, templates
+from src.dashboard.deps import STAGE_ERROR_HINTS, get_stage_counts, templates
+from src.dashboard.persistence import get_last_run, on_finish, on_start
 from src.dashboard.tasks import registry
 from src.db.session import get_session
 from src.discovery.runner import run_discovery_for_campaign
@@ -41,10 +42,15 @@ def _stage_partial(
     task_running: bool,
     active_stage: str | None,
     task_error: str | None,
+    task_elapsed: int | None = None,
 ) -> HTMLResponse:
-    from src.dashboard.routes.detail import _build_stage_rows
+    from src.dashboard.routes.detail import PIPELINE_STAGES, _build_stage_rows
 
     stage_rows = _build_stage_rows(counts)
+    last_runs = {
+        key: get_last_run(campaign_id, key)
+        for key, _label in PIPELINE_STAGES
+    }
     return templates.TemplateResponse(
         request,
         "partials/stage_status.html",
@@ -54,6 +60,9 @@ def _stage_partial(
             "task_running": task_running,
             "active_stage": active_stage,
             "task_error": task_error,
+            "task_elapsed": task_elapsed,
+            "last_runs": last_runs,
+            "stage_error_hints": STAGE_ERROR_HINTS,
         },
     )
 
@@ -85,7 +94,11 @@ async def run_stage(
     # --- Dispatch to thread pool ---
     fn = _RUNNERS[stage]
     try:
-        registry.start(campaign_id, stage, fn, campaign_id)
+        registry.start(
+            campaign_id, stage, fn, campaign_id,
+            on_start=on_start,
+            on_finish=on_finish,
+        )
         log.info("Started stage %r for campaign %s", stage, campaign_id)
     except RuntimeError as exc:
         # Race condition: became running between the is_running check and start()
