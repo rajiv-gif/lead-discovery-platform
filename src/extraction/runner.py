@@ -23,7 +23,8 @@ from src.models.campaign import Campaign
 from src.models.company import Company
 from src.models.company_page import CompanyPage
 from src.models.discovery_hit import DiscoveryHit
-from src.models.enums import DiscoveryHitStatus, PageType
+from src.models.enums import DiscoveryHitStatus, PageType, PhoneType
+from src.models.phone import Phone
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +126,29 @@ def _extract_hit(
     # --- Persist ---
     ps = persist_result(session, hit.company_id, final_result, country_hint)
 
-    has_data = (ps.contacts_created + ps.emails_created + ps.phones_created) > 0
+    # --- Fallback: seed phone from Google Places if extraction found none ---
+    # Many business websites hide phone numbers in images or JS. The Places API
+    # always returns a phone number; seed it as an UNKNOWN-type Phone record so
+    # the lead is not disqualified for having zero contact channels.
+    places_phone_seeded = 0
+    if ps.phones_created == 0:
+        places_phone = (company.extra_fields or {}).get("phone")
+        if places_phone:
+            session.add(Phone(
+                company_id=hit.company_id,
+                number=places_phone,
+                raw_number=places_phone,
+                phone_type=PhoneType.UNKNOWN,
+                is_primary=True,
+            ))
+            places_phone_seeded = 1
+            log.debug(
+                "Seeded Places phone %r for company %s (extraction found none)",
+                places_phone,
+                hit.company_id,
+            )
+
+    has_data = (ps.contacts_created + ps.emails_created + ps.phones_created + places_phone_seeded) > 0
     hit.status = DiscoveryHitStatus.EXTRACTED
     hit.error_message = None
 
@@ -136,7 +159,7 @@ def _extract_hit(
 
     summary.contacts_created += ps.contacts_created
     summary.emails_created += ps.emails_created
-    summary.phones_created += ps.phones_created
+    summary.phones_created += ps.phones_created + places_phone_seeded
 
 
 def run_extraction_for_campaign(campaign_id: uuid.UUID) -> ExtractionSummary:

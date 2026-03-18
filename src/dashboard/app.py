@@ -18,6 +18,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from src.config.settings import settings
+from src.dashboard.auth import BasicAuthMiddleware
 from src.dashboard.routes import campaigns, detail, export, pipeline, review, status
 
 app = FastAPI(
@@ -26,6 +28,19 @@ app = FastAPI(
     docs_url=None,   # disable Swagger UI for internal tool
     redoc_url=None,
 )
+
+# ---------------------------------------------------------------------------
+# Auth middleware
+# ---------------------------------------------------------------------------
+# Enabled when DASHBOARD_USERNAME and DASHBOARD_PASSWORD are both set.
+# /healthz is always exempt for Railway health checks.
+
+if settings.dashboard_username and settings.dashboard_password:
+    app.add_middleware(
+        BasicAuthMiddleware,
+        username=settings.dashboard_username,
+        password=settings.dashboard_password,
+    )
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -62,8 +77,8 @@ def start() -> None:
 
     uvicorn.run(
         "src.dashboard.app:app",
-        host="127.0.0.1",
-        port=8000,
+        host=settings.dashboard_host,
+        port=settings.dashboard_port,
         reload=False,
         workers=1,  # MUST be 1 — task registry is not multi-worker safe
     )

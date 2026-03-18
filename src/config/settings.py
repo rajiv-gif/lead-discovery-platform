@@ -60,6 +60,16 @@ class Settings:
         # --- Export ---
         self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
 
+        # --- Dashboard auth ---
+        # Set both to enable HTTP Basic Auth. If either is unset, auth is skipped
+        # (safe for local use; required for any public deployment).
+        self.dashboard_username: str | None = os.getenv("DASHBOARD_USERNAME")
+        self.dashboard_password: str | None = os.getenv("DASHBOARD_PASSWORD")
+
+        # --- Dashboard server ---
+        self.dashboard_host: str = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+        self.dashboard_port: int = int(os.getenv("DASHBOARD_PORT", "8000"))
+
     @staticmethod
     def _require(key: str) -> str:
         value = os.getenv(key)
