@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.models.enums import EmailStatus, PageType, PhoneType, ScoreBand
+from src.scoring.aeo import AeoSignals
 
 
 @dataclass
@@ -24,6 +25,7 @@ def compute_score(
     pages: list,
     website_reachable: bool,
     is_suppressed: bool,
+    aeo_signals: AeoSignals | None = None,
 ) -> ScoringResult:
     """Compute a quality score for a company/lead.
 
@@ -120,7 +122,28 @@ def compute_score(
     if company.country:
         dim_e += 3
 
-    total = dim_a + dim_b + dim_c + dim_d + dim_e
+    # --- Dimension F: AEO Opportunity (max 15) ---
+    # Higher score = more gaps in site optimisation = stronger sales prospect
+    # for AEO / AI-search services.
+    #   +6  no JSON-LD at all (completely unstructured site)
+    #   +3  has JSON-LD but missing LocalBusiness/Dentist schema type
+    #   +4  no mobile viewport meta tag
+    #   +3  no Open Graph tags
+    #   +2  serving over HTTP (not HTTPS)
+    dim_f = 0
+    if aeo_signals is not None:
+        if not aeo_signals.has_json_ld:
+            dim_f += 6
+        elif not aeo_signals.has_local_business_schema:
+            dim_f += 3
+        if not aeo_signals.has_viewport_meta:
+            dim_f += 4
+        if not aeo_signals.has_og_tags:
+            dim_f += 3
+        if not aeo_signals.is_https:
+            dim_f += 2
+
+    total = dim_a + dim_b + dim_c + dim_d + dim_e + dim_f
 
     # --- Score band ---
     if total >= 75:
@@ -136,7 +159,15 @@ def compute_score(
         "verification_quality": dim_c,
         "scrape_quality": dim_d,
         "location": dim_e,
+        "aeo_opportunity": dim_f,
         "website_reachable": website_reachable,
+        "aeo_signals": {
+            "has_json_ld": aeo_signals.has_json_ld if aeo_signals else None,
+            "has_local_business_schema": aeo_signals.has_local_business_schema if aeo_signals else None,
+            "has_viewport_meta": aeo_signals.has_viewport_meta if aeo_signals else None,
+            "has_og_tags": aeo_signals.has_og_tags if aeo_signals else None,
+            "is_https": aeo_signals.is_https if aeo_signals else None,
+        },
         "total": total,
     }
 
