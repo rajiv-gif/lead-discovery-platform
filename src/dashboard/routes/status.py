@@ -47,7 +47,7 @@ async def campaign_status(request: Request, campaign_id: uuid.UUID) -> HTMLRespo
 
     stage_rows = _build_stage_rows(counts)
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/stage_status.html",
         {
@@ -61,3 +61,9 @@ async def campaign_status(request: Request, campaign_id: uuid.UUID) -> HTMLRespo
             "stage_error_hints": STAGE_ERROR_HINTS,
         },
     )
+    # When the task just finished, tell HTMX to do a full page reload.
+    # This ensures the Review button, stats row, and log panel all reflect
+    # the completed state without a manual refresh.
+    if not task_running:
+        response.headers["HX-Refresh"] = "true"
+    return response
