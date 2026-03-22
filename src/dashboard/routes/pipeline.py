@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from src.dashboard.deps import STAGE_ERROR_HINTS, get_stage_counts, templates
+from src.dashboard.log_capture import get_log_lines, start_capture, stop_capture
 from src.dashboard.persistence import get_last_run, on_finish, on_start
 from src.dashboard.tasks import registry
 from src.db.session import get_session
@@ -93,11 +94,17 @@ async def run_stage(
 
     # --- Dispatch to thread pool ---
     fn = _RUNNERS[stage]
+
+    def _on_finish_with_log(cid, entry):
+        on_finish(cid, entry)
+        stop_capture(cid)
+
+    start_capture(campaign_id, stage)
     try:
         registry.start(
             campaign_id, stage, fn, campaign_id,
             on_start=on_start,
-            on_finish=on_finish,
+            on_finish=_on_finish_with_log,
         )
         log.info("Started stage %r for campaign %s", stage, campaign_id)
     except RuntimeError as exc:
@@ -116,4 +123,19 @@ async def run_stage(
         task_running=task_running,
         active_stage=active_stage,
         task_error=None,
+    )
+
+
+@router.get("/campaigns/{campaign_id}/logs", response_class=HTMLResponse)
+async def campaign_logs(request: Request, campaign_id: uuid.UUID) -> HTMLResponse:
+    lines = get_log_lines(campaign_id)
+    task_running = registry.is_running(campaign_id)
+    return templates.TemplateResponse(
+        request,
+        "partials/log_panel.html",
+        {
+            "lines": lines,
+            "campaign_id": campaign_id,
+            "task_running": task_running,
+        },
     )

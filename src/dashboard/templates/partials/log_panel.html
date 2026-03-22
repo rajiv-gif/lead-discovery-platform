@@ -1,0 +1,36 @@
+{# Log panel partial — returned on initial include and as HTMX swap target.
+   Polls every 2s while a stage is running; stops when idle. #}
+
+{% if task_running %}
+<span
+  hx-get="/campaigns/{{ campaign_id }}/logs"
+  hx-trigger="load delay:2s"
+  hx-target="#log-panel"
+  hx-swap="innerHTML"
+  aria-hidden="true">
+</span>
+{% endif %}
+
+<pre id="log-pre" style="
+  margin: 0;
+  padding: .85rem 1rem;
+  font-family: var(--font-mono);
+  font-size: .75rem;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 340px;
+  overflow-y: auto;
+  background: transparent;
+">{% if lines %}{% for line in lines %}{% if line.startswith('▶') %}<span style="color:var(--accent);font-weight:600">{{ line }}</span>{% elif line.startswith('─') %}<span style="color:var(--border-2)">{{ line }}</span>{% elif ' ERROR   ' in line or ' CRITICAL' in line %}<span style="color:var(--red)">{{ line }}</span>{% elif ' WARNING ' in line %}<span style="color:var(--warm)">{{ line }}</span>{% elif ' INFO    ' in line %}<span style="color:var(--text)">{{ line }}</span>{% else %}{{ line }}{% endif %}
+{% endfor %}{% else %}<span style="color:var(--text-3)">No logs yet. Run a pipeline stage to see output here.</span>{% endif %}</pre>
+
+{% if task_running %}
+<script>
+  (function() {
+    var pre = document.getElementById('log-pre');
+    if (pre) pre.scrollTop = pre.scrollHeight;
+  })();
+</script>
+{% endif %}
