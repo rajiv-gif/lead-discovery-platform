@@ -92,7 +92,7 @@ def _city_queries(campaign: Campaign) -> list[GeoQuery]:
         raise ValueError(
             f"Campaign {campaign.id}: geo_city and geo_country are required for CITY mode"
         )
-    text_query = f"{campaign.specialty} in {campaign.geo_city}, {campaign.geo_country}"
+    text_query = f"{campaign.niche} in {campaign.geo_city}, {campaign.geo_country}"
     return [
         GeoQuery(
             text_query=text_query,
@@ -111,7 +111,7 @@ def _postal_code_queries(campaign: Campaign) -> list[GeoQuery]:
         raise ValueError(
             f"Campaign {campaign.id}: geo_postal_code is required for POSTAL_CODE mode"
         )
-    text_query = f"{campaign.specialty} in {campaign.geo_postal_code}"
+    text_query = f"{campaign.niche} in {campaign.geo_postal_code}"
     return [
         GeoQuery(
             text_query=text_query,
@@ -152,7 +152,7 @@ def _bounding_box_queries(campaign: Campaign) -> list[GeoQuery]:
     center_lng = (campaign.geo_sw_lng + campaign.geo_ne_lng) / 2
     return [
         GeoQuery(
-            text_query=campaign.specialty,
+            text_query=campaign.niche,
             location_restriction=location_restriction,
             method=GeoMethod.BOUNDING_BOX.value,
             center_lat=center_lat,
@@ -183,7 +183,7 @@ def _center_radius_queries(campaign: Campaign) -> list[GeoQuery]:
     }
     return [
         GeoQuery(
-            text_query=campaign.specialty,
+            text_query=campaign.niche,
             location_restriction=location_restriction,
             method=GeoMethod.CENTER_RADIUS.value,
             center_lat=campaign.geo_center_lat,

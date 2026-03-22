@@ -50,9 +50,9 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
         SAEnum(GeoMethod, name="geomethod"),
         nullable=False,
     )
-    # Business type used as the Places textQuery prefix (e.g. "dentists").
-    # Defaults to "dentists" in Python; migration backfills existing rows.
-    specialty: Mapped[str] = mapped_column(Text, nullable=False, default="dentists")
+    # Business type / niche used as the Places textQuery (e.g. "dentists").
+    # Defaults to "dentists" in Python; migration renames column from specialty.
+    niche: Mapped[str] = mapped_column(Text, nullable=False, default="dentists")
 
     # --- City / postal-code fields ---
     geo_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

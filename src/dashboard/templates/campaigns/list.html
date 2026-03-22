@@ -2,41 +2,55 @@
 {% block title %}Campaigns — Lead Discovery{% endblock %}
 
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
-  <h2>Campaigns</h2>
-  <a href="/campaigns/new" role="button">+ New campaign</a>
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem">
+  <div>
+    <h1>Campaigns</h1>
+    <p class="muted" style="margin-top:.3rem; font-size:.88rem">{{ campaigns|length }} campaign{{ 's' if campaigns|length != 1 else '' }}</p>
+  </div>
+  <a href="/campaigns/new" class="btn btn-primary">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="7" y1="1" x2="7" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    New campaign
+  </a>
 </div>
 
 {% if campaigns %}
-<figure>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Specialty</th>
-        <th>Geo method</th>
-        <th>Status</th>
-        <th>Created</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in campaigns %}
-      <tr>
-        <td><strong>{{ c.name }}</strong></td>
-        <td>{{ c.specialty }}</td>
-        <td>{{ c.geo_method.value }}</td>
-        <td>
-          <span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span>
-        </td>
-        <td>{{ c.created_at.strftime("%Y-%m-%d") if c.created_at else "—" }}</td>
-        <td><a href="/campaigns/{{ c.id }}">View →</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</figure>
+<div style="display:flex; flex-direction:column; gap:.75rem">
+  {% for c in campaigns %}
+  <a href="/campaigns/{{ c.id }}" style="text-decoration:none; color:inherit; display:block">
+    <div class="card" style="border-left: 3px solid {% if c.status.value == 'active' %}var(--green){% elif c.status.value == 'draft' %}var(--border-2){% else %}var(--text-3){% endif %}; transition: border-color .15s, background .15s; cursor:pointer" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--surface)'">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem">
+        <div style="min-width:0">
+          <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap">
+            <span style="font-family:var(--font-head); font-weight:700; font-size:1rem">{{ c.name }}</span>
+            <span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span>
+          </div>
+          <div style="margin-top:.35rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
+            <span class="muted" style="font-size:.82rem; font-family:var(--font-mono)">{{ c.niche }}</span>
+            <span class="muted" style="font-size:.82rem">·</span>
+            <span class="muted" style="font-size:.82rem">{{ c.geo_method.value }}
+              {%- if c.geo_city %} · {{ c.geo_city }}{% if c.geo_country %}, {{ c.geo_country }}{% endif %}{% endif -%}
+            </span>
+            <span class="muted" style="font-size:.82rem">·</span>
+            <span class="muted" style="font-size:.82rem">{{ c.created_at.strftime("%b %d, %Y") if c.created_at else "—" }}</span>
+          </div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color:var(--text-3); flex-shrink:0"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
 {% else %}
-<p>No campaigns yet. <a href="/campaigns/new">Create your first campaign</a>.</p>
+<div class="card" style="text-align:center; padding:4rem 2rem">
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="margin:0 auto 1rem; display:block; color:var(--text-3)">
+    <circle cx="20" cy="20" r="10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+    <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1" fill="none" opacity=".4"/>
+    <line x1="20" y1="5" x2="20" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="35" y1="20" x2="30" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <p style="color:var(--text-2); margin-bottom:1.25rem">No campaigns yet.</p>
+  <a href="/campaigns/new" class="btn btn-primary">Create your first campaign</a>
+</div>
 {% endif %}
 {% endblock %}

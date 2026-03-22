@@ -44,7 +44,7 @@ async def campaign_create(request: Request):
     form = await request.form()
 
     name = (form.get("name") or "").strip()
-    specialty = (form.get("specialty") or "dentists").strip()
+    niche = (form.get("niche") or "dentists").strip()
     geo_method_raw = (form.get("geo_method") or "").strip()
     description = (form.get("description") or "").strip() or None
 
@@ -106,7 +106,7 @@ async def campaign_create(request: Request):
         campaign = Campaign(
             name=name,
             description=description,
-            specialty=specialty,
+            niche=niche,
             status=CampaignStatus.DRAFT,
             geo_method=geo_method,
             geo_city=city,
