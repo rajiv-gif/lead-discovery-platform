@@ -62,7 +62,7 @@ class CompanyLead(UUIDPrimaryKey, TimestampMixin, Base):
         index=True,
     )
     status: Mapped[LeadStatus] = mapped_column(
-        SAEnum(LeadStatus, name="leadstatus"),
+        SAEnum(LeadStatus, name="leadstatus", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=LeadStatus.NEW,
         index=True,
@@ -71,7 +71,7 @@ class CompanyLead(UUIDPrimaryKey, TimestampMixin, Base):
     # --- Scoring ---
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     score_band: Mapped[Optional[ScoreBand]] = mapped_column(
-        SAEnum(ScoreBand, name="scoreband"),
+        SAEnum(ScoreBand, name="scoreband", values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
     # Per-dimension breakdown: {completeness, verification, source, extraction}
@@ -80,7 +80,7 @@ class CompanyLead(UUIDPrimaryKey, TimestampMixin, Base):
 
     # --- Review ---
     review_status: Mapped[ReviewStatus] = mapped_column(
-        SAEnum(ReviewStatus, name="reviewstatus"),
+        SAEnum(ReviewStatus, name="reviewstatus", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ReviewStatus.PENDING,
         # NOT indexed here — covered by compound (review_status, score DESC) in migration

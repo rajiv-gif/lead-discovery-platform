@@ -62,7 +62,7 @@ class CompanyPage(UUIDPrimaryKey, TimestampMixin, Base):
 
     # --- Page classification ---
     page_type: Mapped[Optional[PageType]] = mapped_column(
-        SAEnum(PageType, name="pagetype"),
+        SAEnum(PageType, name="pagetype", values_callable=lambda x: [e.value for e in x]),
         nullable=True,
         index=True,
     )

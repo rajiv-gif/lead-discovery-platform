@@ -37,7 +37,7 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[CampaignStatus] = mapped_column(
-        SAEnum(CampaignStatus, name="campaignstatus"),
+        SAEnum(CampaignStatus, name="campaignstatus", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=CampaignStatus.DRAFT,
         index=True,
@@ -47,7 +47,7 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     # geo_method is required at campaign creation; no Python-level default because
     # the CLI always supplies one of the four GeoMethod values.
     geo_method: Mapped[GeoMethod] = mapped_column(
-        SAEnum(GeoMethod, name="geomethod"),
+        SAEnum(GeoMethod, name="geomethod", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     # Business type / niche used as the Places textQuery (e.g. "dentists").
