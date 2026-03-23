@@ -336,5 +336,56 @@
     {% block content %}{% endblock %}
   </main>
 
+  <!-- Custom confirm modal (replaces browser confirm() for hx-confirm) -->
+  <div id="confirm-overlay" hidden
+       style="position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+              z-index:200;display:flex;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:14px;
+                padding:1.75rem 2rem;width:min(420px,92vw);display:flex;flex-direction:column;gap:1.25rem;
+                box-shadow:0 24px 60px rgba(0,0,0,.5)">
+      <p id="confirm-message" style="font-size:.95rem;color:var(--text);line-height:1.5"></p>
+      <div style="display:flex;gap:.6rem;justify-content:flex-end">
+        <button id="confirm-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+        <button id="confirm-ok" class="btn btn-primary btn-sm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const overlay  = document.getElementById('confirm-overlay');
+    const msgEl    = document.getElementById('confirm-message');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const okBtn    = document.getElementById('confirm-ok');
+    let _resolve;
+
+    function showConfirm(message) {
+      return new Promise(resolve => {
+        msgEl.textContent = message;
+        overlay.hidden = false;
+        _resolve = resolve;
+      });
+    }
+
+    function close(result) {
+      overlay.hidden = true;
+      if (_resolve) { _resolve(result); _resolve = null; }
+    }
+
+    cancelBtn.addEventListener('click', () => close(false));
+    okBtn.addEventListener('click',     () => close(true));
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) close(false); });
+
+    // Intercept hx-confirm before the browser dialog fires
+    document.addEventListener('htmx:confirm', async function (e) {
+      if (!e.detail.question) return;
+      e.preventDefault();
+      const confirmed = await showConfirm(e.detail.question);
+      if (confirmed) e.detail.issueRequest(true);
+    });
+  })();
+  </script>
+
 </body>
 </html>
