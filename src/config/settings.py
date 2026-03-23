@@ -72,7 +72,10 @@ class Settings:
 
         # --- Dashboard server ---
         self.dashboard_host: str = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-        self.dashboard_port: int = int(os.getenv("DASHBOARD_PORT", "8000"))
+        # Railway injects PORT; fall back to DASHBOARD_PORT for local dev.
+        self.dashboard_port: int = int(
+            os.getenv("PORT") or os.getenv("DASHBOARD_PORT", "8000")
+        )
 
     @staticmethod
     def _require(key: str) -> str:

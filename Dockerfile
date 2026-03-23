@@ -2,26 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
 COPY pyproject.toml ./
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Bust cache when dependencies change (increment when updating pyproject.toml)
-ARG CACHEBUST=2
+ARG CACHEBUST=3
 RUN pip install --no-cache-dir -e .
 
-# Create data directories
 RUN mkdir -p data/pages data/llm_runs data/exports data/website_checks
 
-# DASHBOARD_HOST must be 0.0.0.0 for Railway to route traffic in.
-# Railway injects $PORT at runtime — CMD uses it directly.
 ENV DASHBOARD_HOST=0.0.0.0
 
-CMD ["sh", "-c", "uvicorn src.dashboard.app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
+CMD ["leads-ui"]
