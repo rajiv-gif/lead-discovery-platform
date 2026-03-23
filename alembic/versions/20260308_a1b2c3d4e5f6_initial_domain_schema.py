@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from alembic import op
@@ -69,10 +70,16 @@ _ENUM_TYPES: list[tuple[str, list[str]]] = [
 ]
 
 
-def _sa_enum(name: str) -> sa.Enum:
-    """Return an SA Enum referencing an already-created PG type."""
+def _sa_enum(name: str) -> PgEnum:
+    """Return a PG-native Enum that references an already-created type.
+
+    postgresql.ENUM(create_type=False) reliably suppresses all CREATE TYPE DDL
+    during op.create_table.  sa.Enum(create_type=False) does not — SQLAlchemy
+    2.x still fires the _on_table_create event and emits CREATE TYPE, which
+    fails with DuplicateObject when the type was pre-created by the DO block.
+    """
     values = next(v for n, v in _ENUM_TYPES if n == name)
-    return sa.Enum(*values, name=name, create_type=False)
+    return PgEnum(*values, name=name, create_type=False)
 
 
 # ---------------------------------------------------------------------------
