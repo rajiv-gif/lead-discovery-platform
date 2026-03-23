@@ -11,8 +11,8 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-ARG CACHEBUST=3
 RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir itsdangerous>=2.1
 
 RUN mkdir -p data/pages data/llm_runs data/exports data/website_checks
 
