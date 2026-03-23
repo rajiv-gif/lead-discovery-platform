@@ -90,6 +90,11 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     # JSONB list of search query strings, e.g. ["luxury fashion online", "DTC fashion brand"]
     search_queries: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
+    # --- Ecommerce platform filter (WEB_SEARCH only) ---
+    # "shopify" → auto-prepend site:myshopify.com and run Shopify verification
+    # "woocommerce" → future; "any" / None → no platform filter
+    ecommerce_platform: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     discovery_hits: Mapped[list[DiscoveryHit]] = relationship(
         "DiscoveryHit", back_populates="campaign"
     )

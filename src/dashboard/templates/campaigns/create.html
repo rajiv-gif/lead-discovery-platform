@@ -195,13 +195,35 @@
     <div id="section-web" class="card" style="display:none; margin-bottom:1.25rem">
       <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Search Queries</div>
 
+      <!-- Platform filter -->
+      <div class="form-group">
+        <label class="form-label">Platform</label>
+        <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer; padding:.4rem .75rem; border:1px solid var(--border); border-radius:6px; font-size:.85rem">
+            <input type="radio" name="ecommerce_platform" value="any"
+                   onchange="updatePlatformHint()"
+                   {% if not form or (form.ecommerce_platform|default('any')) == 'any' %}checked{% endif %}
+                   style="accent-color:var(--accent)">
+            Any store
+          </label>
+          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer; padding:.4rem .75rem; border:1px solid var(--border); border-radius:6px; font-size:.85rem">
+            <input type="radio" name="ecommerce_platform" value="shopify"
+                   onchange="updatePlatformHint()"
+                   {% if form and form.ecommerce_platform == 'shopify' %}checked{% endif %}
+                   style="accent-color:var(--accent)">
+            <span style="color:#96bf48; font-weight:600">⬡</span> Shopify only
+          </label>
+        </div>
+        <div id="platform-hint" class="form-hint" style="margin-top:.4rem"></div>
+      </div>
+
       <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" for="search_queries">Queries <span style="color:var(--red)">*</span></label>
+        <label class="form-label" for="search_queries">Search queries <span style="color:var(--red)">*</span></label>
         <textarea class="form-input" id="search_queries" name="search_queries"
-                  rows="5"
-                  placeholder="One query per line, e.g.&#10;luxury fashion online store&#10;site:myshopify.com luxury fashion&#10;DTC luxury fashion brand US"
+                  rows="4"
+                  placeholder="One query per line, e.g.&#10;luxury fashion&#10;premium streetwear brand&#10;sustainable skincare"
                   style="resize:vertical; font-family:var(--font-mono); font-size:.83rem">{{ form.search_queries if form else '' }}</textarea>
-        <div class="form-hint">Each line runs as a separate DuckDuckGo search. Returns ~10 results per query.</div>
+        <div class="form-hint" id="queries-hint">Each line runs as a separate DuckDuckGo search. Returns ~10 results per query.</div>
       </div>
     </div>
 
@@ -255,9 +277,21 @@
     });
   }
 
+  function updatePlatformHint() {
+    const val = document.querySelector('input[name="ecommerce_platform"]:checked');
+    const hint = document.getElementById("platform-hint");
+    if (!hint) return;
+    if (val && val.value === "shopify") {
+      hint.textContent = "Searches site:myshopify.com and enriches results with product count and price range.";
+    } else {
+      hint.textContent = "Searches the open web — any ecommerce platform.";
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function() {
     updateGeoFields();
     updateSource();
+    updatePlatformHint();
   });
 </script>
 {% endblock %}

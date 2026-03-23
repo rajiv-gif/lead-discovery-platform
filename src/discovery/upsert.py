@@ -187,6 +187,7 @@ def upsert_company_from_web_search(
     name: str,
     title: str,
     snippet: str,
+    extra_fields: dict | None = None,
 ) -> tuple[Company, bool]:
     """Find or create a ``Company`` row for a web-search result.
 
@@ -211,11 +212,15 @@ def upsert_company_from_web_search(
     # Derive a display name from the page title if available
     display_name = name or title or domain
 
+    base_extra = {"source_title": title, "source_snippet": snippet}
+    if extra_fields:
+        base_extra.update(extra_fields)
+
     company = Company(
         name=display_name,
         website=url,
         domain=domain,
-        extra_fields={"source_title": title, "source_snippet": snippet},
+        extra_fields=base_extra,
     )
     session.add(company)
     session.flush()

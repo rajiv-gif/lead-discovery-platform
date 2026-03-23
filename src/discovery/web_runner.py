@@ -4,6 +4,11 @@ Uses DuckDuckGo to find company websites from free-text search queries stored
 in ``campaign.search_queries``.  Each query returns up to 10 organic results;
 companies are deduplicated by domain across all queries in the run.
 
+Shopify platform mode (campaign.ecommerce_platform == "shopify"):
+  - Auto-prepends "site:myshopify.com" to all queries for precise targeting
+  - Fetches /products.json after discovery to enrich company.extra_fields with
+    product count and price range (used in scoring + dashboard display)
+
 The rest of the pipeline (scraper → extraction → scoring) is identical to the
 Places flow — only the discovery source changes.
 """
@@ -12,8 +17,11 @@ from __future__ import annotations
 import logging
 import uuid
 
+import httpx
+
 from src.db.session import get_session
 from src.discovery.runner import DiscoverySummary
+from src.discovery.shopify import enrich_company_extra_fields, fetch_shopify_info, extract_myshopify_url
 from src.discovery.upsert import create_web_search_hit, upsert_company_from_web_search
 from src.discovery.web_search import DuckDuckGoClient, WebSearchError
 from src.models.campaign import Campaign
@@ -22,6 +30,7 @@ log = logging.getLogger(__name__)
 
 _DDG_RATE_LIMIT = 2.0   # seconds between DDG requests
 _MAX_RESULTS = 10        # organic results per query
+_HOMEPAGE_TIMEOUT = 10.0 # seconds to fetch homepage for Shopify detection
 
 
 def run_web_discovery_for_campaign(
@@ -40,18 +49,27 @@ def run_web_discovery_for_campaign(
     Raises:
         ValueError: If ``campaign.search_queries`` is empty.
     """
-    queries: list[str] = campaign.search_queries or []
-    if not queries:
+    is_shopify = (campaign.ecommerce_platform or "").lower() == "shopify"
+    raw_queries: list[str] = campaign.search_queries or []
+
+    if not raw_queries:
         raise ValueError(
             f"Campaign {campaign_id}: search_queries must have at least one entry "
             "for WEB_SEARCH discovery."
         )
 
+    # For Shopify mode, prepend site:myshopify.com to every query
+    queries = (
+        [f"site:myshopify.com {q}" for q in raw_queries]
+        if is_shopify else raw_queries
+    )
+
     log.info(
-        "Starting web-search discovery for campaign id=%s name=%r (%d queries)",
+        "Starting web-search discovery for campaign id=%s name=%r (%d queries, platform=%s)",
         campaign_id,
         campaign.name,
         len(queries),
+        campaign.ecommerce_platform or "any",
     )
 
     client = DuckDuckGoClient(rate_limit_delay=_DDG_RATE_LIMIT)
@@ -83,6 +101,11 @@ def run_web_discovery_for_campaign(
                     continue
                 seen_domains.add(result.domain)
 
+                # For Shopify mode: verify + enrich via products.json
+                extra_fields: dict = {}
+                if is_shopify:
+                    extra_fields = _enrich_shopify(result.url, result.domain)
+
                 company, company_created = upsert_company_from_web_search(
                     session=session,
                     url=result.url,
@@ -90,10 +113,16 @@ def run_web_discovery_for_campaign(
                     name="",
                     title=result.title,
                     snippet=result.snippet,
+                    extra_fields=extra_fields,
                 )
                 if company_created:
                     summary.companies_created += 1
                 else:
+                    # Merge Shopify info into existing company
+                    if extra_fields and company.extra_fields:
+                        company.extra_fields = {**company.extra_fields, **extra_fields}
+                    elif extra_fields:
+                        company.extra_fields = extra_fields
                     summary.companies_matched += 1
 
                 hit, hit_created = create_web_search_hit(
@@ -119,3 +148,41 @@ def run_web_discovery_for_campaign(
         summary.errors,
     )
     return summary
+
+
+def _enrich_shopify(url: str, domain: str) -> dict:
+    """Fetch homepage and products.json, return Shopify enrichment dict."""
+    extra: dict = {}
+    try:
+        resp = httpx.get(
+            url,
+            timeout=_HOMEPAGE_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": "LeadDiscoveryBot/1.0"},
+        )
+        html = resp.text
+        myshopify_url = extract_myshopify_url(html, url)
+        info = fetch_shopify_info(domain, myshopify_url)
+
+        extra["platform"] = "shopify"
+        if myshopify_url:
+            extra["shopify_myshopify_url"] = myshopify_url
+        if info.product_count:
+            extra["shopify_product_count"] = info.product_count
+        if info.price_min is not None:
+            extra["shopify_price_min"] = info.price_min
+        if info.price_max is not None:
+            extra["shopify_price_max"] = info.price_max
+
+        log.debug(
+            "Shopify enrichment: domain=%r products=%d price=%.0f–%.0f",
+            domain,
+            info.product_count,
+            info.price_min or 0,
+            info.price_max or 0,
+        )
+    except Exception as exc:
+        log.debug("Shopify enrichment failed for %r: %s", domain, exc)
+        extra["platform"] = "shopify"  # still mark as shopify even if enrichment fails
+
+    return extra

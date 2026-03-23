@@ -117,6 +117,17 @@
           {{ ld.company.website | truncate(45, true, '…') }}
         </a>
         {% endif %}
+        {% if ld.company.extra_fields and ld.company.extra_fields.get('platform') == 'shopify' %}
+        <span style="display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:600; color:#96bf48; background:rgba(150,191,72,.1); border:1px solid rgba(150,191,72,.25); border-radius:4px; padding:.15rem .45rem">
+          <span>⬡</span> Shopify
+          {% if ld.company.extra_fields.get('shopify_product_count') %}
+          · {{ ld.company.extra_fields['shopify_product_count'] }} products
+          {% endif %}
+          {% if ld.company.extra_fields.get('shopify_price_min') is not none and ld.company.extra_fields.get('shopify_price_max') is not none %}
+          · ${{ "%.0f"|format(ld.company.extra_fields['shopify_price_min']) }}–${{ "%.0f"|format(ld.company.extra_fields['shopify_price_max']) }}
+          {% endif %}
+        </span>
+        {% endif %}
       </div>
 
       <!-- AEO signals if present in score_details -->

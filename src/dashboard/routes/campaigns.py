@@ -80,6 +80,8 @@ async def campaign_create(request: Request):
         if not search_queries:
             return _err("At least one search query is required for web search campaigns.")
 
+        ecommerce_platform = (form.get("ecommerce_platform") or "any").strip() or None
+
         with get_session() as session:
             campaign = Campaign(
                 name=name,
@@ -88,6 +90,7 @@ async def campaign_create(request: Request):
                 status=CampaignStatus.DRAFT,
                 discovery_source=DiscoverySource.WEB_SEARCH,
                 search_queries=search_queries,
+                ecommerce_platform=ecommerce_platform,
             )
             session.add(campaign)
             session.flush()
