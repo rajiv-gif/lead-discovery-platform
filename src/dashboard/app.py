@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.config.settings import settings
 from src.dashboard.auth import BasicAuthMiddleware
-from src.dashboard.routes import campaigns, detail, export, pipeline, review, status
+from src.dashboard.routes import api, campaigns, detail, export, pipeline, review, status
 
 app = FastAPI(
     title="Lead Discovery Dashboard",
@@ -46,6 +46,7 @@ if settings.dashboard_username and settings.dashboard_password:
 # Routers
 # ---------------------------------------------------------------------------
 
+app.include_router(api.router)
 app.include_router(campaigns.router)
 app.include_router(detail.router)
 app.include_router(pipeline.router)

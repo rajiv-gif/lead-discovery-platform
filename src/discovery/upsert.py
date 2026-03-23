@@ -1,4 +1,4 @@
-"""Company upsert and discovery-hit creation for the Places discovery stage.
+"""Company upsert and discovery-hit creation for the Places and web-search discovery stages.
 
 Deduplication strategy for companies (in priority order):
   1. ``Company.google_place_id`` — stable, unique across the Places dataset.
@@ -178,6 +178,90 @@ def _merge_fields(company: Company, result: PlaceResult) -> None:
         company.extra_fields = merged
     else:
         company.extra_fields = new_extra
+
+
+def upsert_company_from_web_search(
+    session: Session,
+    url: str,
+    domain: str,
+    name: str,
+    title: str,
+    snippet: str,
+) -> tuple[Company, bool]:
+    """Find or create a ``Company`` row for a web-search result.
+
+    Deduplication is by domain only (no google_place_id for web-search sources).
+
+    Returns:
+        ``(company, created)`` where ``created`` is True for new rows.
+    """
+    company: Optional[Company] = None
+
+    if domain:
+        company = session.execute(
+            select(Company).where(Company.domain == domain)
+        ).scalar_one_or_none()
+
+    if company is not None:
+        log.debug("web-search company matched by domain=%r", domain)
+        if not company.website:
+            company.website = url
+        return company, False
+
+    # Derive a display name from the page title if available
+    display_name = name or title or domain
+
+    company = Company(
+        name=display_name,
+        website=url,
+        domain=domain,
+        extra_fields={"source_title": title, "source_snippet": snippet},
+    )
+    session.add(company)
+    session.flush()
+    log.debug("web-search company created: domain=%r url=%r", domain, url)
+    return company, True
+
+
+def create_web_search_hit(
+    session: Session,
+    campaign_id: object,
+    company: Company,
+    url: str,
+    query: str,
+    rank: int,
+) -> tuple[DiscoveryHit, bool]:
+    """Find or create a ``DiscoveryHit`` for a web-search result.
+
+    The ``source_url`` is the canonical company homepage URL found by the search.
+
+    Returns:
+        ``(hit, created)`` where ``created`` is True for new rows.
+    """
+    existing: Optional[DiscoveryHit] = session.execute(
+        select(DiscoveryHit).where(
+            DiscoveryHit.campaign_id == campaign_id,
+            DiscoveryHit.source_url == url,
+        )
+    ).scalar_one_or_none()
+
+    if existing is not None:
+        log.debug("web-search hit already exists for campaign=%s url=%r", campaign_id, url)
+        return existing, False
+
+    hit = DiscoveryHit(
+        campaign_id=campaign_id,
+        company_id=company.id,
+        source_url=url,
+        source_type=DiscoveryHitSourceType.WEB_SEARCH,
+        status=DiscoveryHitStatus.PENDING,
+        discovery_query=query,
+        discovery_method="web_search",
+        discovered_at=datetime.now(timezone.utc),
+        api_response_rank=rank,
+    )
+    session.add(hit)
+    return hit, True
 
 
 def _build_extra_fields(result: PlaceResult) -> dict:

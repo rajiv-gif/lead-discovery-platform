@@ -4,9 +4,9 @@
 {% block content %}
 <a href="/" class="page-back">← Campaigns</a>
 
-<div style="max-width:600px">
+<div style="max-width:640px">
   <h1 style="margin-bottom:.35rem">New Campaign</h1>
-  <p class="muted" style="font-size:.88rem; margin-bottom:2rem">Configure your lead discovery target and geography.</p>
+  <p class="muted" style="font-size:.88rem; margin-bottom:2rem">Configure your lead discovery target.</p>
 
   {% if error %}
   <div class="alert alert-error" style="margin-bottom:1.5rem">{{ error }}</div>
@@ -14,6 +14,7 @@
 
   <form method="post" action="/campaigns/new">
 
+    <!-- ── Campaign basics ───────────────────────────────────────── -->
     <div class="card" style="margin-bottom:1.25rem">
       <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Campaign</div>
 
@@ -21,30 +22,58 @@
         <label class="form-label" for="name">Campaign name <span style="color:var(--red)">*</span></label>
         <input class="form-input" type="text" id="name" name="name" required
                value="{{ form.name if form else '' }}"
-               placeholder="e.g. London Dentists Q2">
+               placeholder="e.g. New York Dentists — State">
       </div>
 
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label" for="niche">Niche</label>
         <input class="form-input" type="text" id="niche" name="niche"
                value="{{ form.niche if form else 'dentists' }}"
-               placeholder="e.g. dentists, basement waterproofing, med spa">
-        <div class="form-hint">The business type searched via Google Places and Yelp.</div>
+               placeholder="e.g. dentists, basement waterproofing, luxury fashion">
+        <div class="form-hint">Business type searched via Google Places, or topic for web search.</div>
       </div>
     </div>
 
+    <!-- ── Discovery source toggle ───────────────────────────────── -->
     <div class="card" style="margin-bottom:1.25rem">
+      <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Discovery Source</div>
+
+      <div style="display:flex; gap:.75rem; flex-wrap:wrap">
+        <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; padding:.55rem .9rem; border:1px solid var(--border); border-radius:6px; flex:1; min-width:180px" id="src-label-places">
+          <input type="radio" name="discovery_source" value="google_places"
+                 onchange="updateSource()"
+                 {% if not form or (form.discovery_source|default('google_places')) == 'google_places' %}checked{% endif %}
+                 style="accent-color:var(--accent)">
+          <div>
+            <div style="font-size:.88rem; font-weight:500">Local Business</div>
+            <div style="font-size:.75rem; color:var(--text-3)">Google Places API</div>
+          </div>
+        </label>
+        <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; padding:.55rem .9rem; border:1px solid var(--border); border-radius:6px; flex:1; min-width:180px" id="src-label-web">
+          <input type="radio" name="discovery_source" value="web_search"
+                 onchange="updateSource()"
+                 {% if form and form.discovery_source == 'web_search' %}checked{% endif %}
+                 style="accent-color:var(--accent)">
+          <div>
+            <div style="font-size:.88rem; font-weight:500">Ecommerce / Web</div>
+            <div style="font-size:.75rem; color:var(--text-3)">DuckDuckGo search</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ── Local Business: Geography ─────────────────────────────── -->
+    <div id="section-places" class="card" style="margin-bottom:1.25rem">
       <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Geography</div>
 
       <div class="form-group">
         <label class="form-label" for="geo_method">Method <span style="color:var(--red)">*</span></label>
         <select class="form-select" id="geo_method" name="geo_method" onchange="updateGeoFields()">
-          {% for m in geo_methods %}
-          <option value="{{ m }}"
-            {% if form and form.geo_method == m %}selected{% endif %}>
-            {{ m }}
-          </option>
-          {% endfor %}
+          <option value="city"          {% if not form or (form.geo_method|default('city')) == 'city' %}selected{% endif %}>City</option>
+          <option value="state"         {% if form and form.geo_method == 'state' %}selected{% endif %}>State (multi-city)</option>
+          <option value="postal_code"   {% if form and form.geo_method == 'postal_code' %}selected{% endif %}>Postal code</option>
+          <option value="bounding_box"  {% if form and form.geo_method == 'bounding_box' %}selected{% endif %}>Bounding box</option>
+          <option value="center_radius" {% if form and form.geo_method == 'center_radius' %}selected{% endif %}>Center + radius</option>
         </select>
       </div>
 
@@ -55,14 +84,48 @@
             <label class="form-label" for="city">City <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="text" id="city" name="city"
                    value="{{ form.city if form else '' }}"
-                   placeholder="e.g. London">
+                   placeholder="e.g. Chicago">
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label" for="country">Country <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="text" id="country" name="country"
                    value="{{ form.country if form else '' }}"
-                   placeholder="e.g. UK">
+                   placeholder="e.g. United States">
           </div>
+        </div>
+      </div>
+
+      <!-- State / multi-city -->
+      <div id="fields_state" style="display:none">
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="geo_state">State <span style="color:var(--red)">*</span></label>
+            <select class="form-select" id="geo_state" name="geo_state"
+                    hx-get="/api/cities"
+                    hx-trigger="change"
+                    hx-include="[name='state_country']"
+                    hx-target="#city-checklist-container"
+                    hx-swap="innerHTML"
+                    onchange="syncStateParam(this)">
+              <option value="">— select state —</option>
+              {% for s in us_states %}
+              <option value="{{ s }}" {% if form and form.geo_state == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="state_country_display">Country</label>
+            <input class="form-input" type="text" id="state_country_display"
+                   value="United States" readonly style="opacity:.6; cursor:default">
+            <input type="hidden" name="country" value="United States">
+          </div>
+        </div>
+        <!-- Hidden param passed with HTMX request -->
+        <input type="hidden" id="state-country-param" name="state_country" value="United States">
+
+        <!-- City checklist — populated via HTMX -->
+        <div id="city-checklist-container">
+          <div style="font-size:.82rem; color:var(--text-3)">Select a state above to choose cities.</div>
         </div>
       </div>
 
@@ -72,7 +135,7 @@
           <label class="form-label" for="postal_code">Postal code <span style="color:var(--red)">*</span></label>
           <input class="form-input" type="text" id="postal_code" name="postal_code"
                  value="{{ form.postal_code if form else '' }}"
-                 placeholder="e.g. SW1A 1AA">
+                 placeholder="e.g. 10001">
         </div>
       </div>
 
@@ -128,6 +191,21 @@
       </div>
     </div>
 
+    <!-- ── Ecommerce / Web Search ─────────────────────────────────── -->
+    <div id="section-web" class="card" style="display:none; margin-bottom:1.25rem">
+      <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Search Queries</div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" for="search_queries">Queries <span style="color:var(--red)">*</span></label>
+        <textarea class="form-input" id="search_queries" name="search_queries"
+                  rows="5"
+                  placeholder="One query per line, e.g.&#10;luxury fashion online store&#10;site:myshopify.com luxury fashion&#10;DTC luxury fashion brand US"
+                  style="resize:vertical; font-family:var(--font-mono); font-size:.83rem">{{ form.search_queries if form else '' }}</textarea>
+        <div class="form-hint">Each line runs as a separate DuckDuckGo search. Returns ~10 results per query.</div>
+      </div>
+    </div>
+
+    <!-- ── Optional ──────────────────────────────────────────────── -->
     <div class="card" style="margin-bottom:1.5rem">
       <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Optional</div>
       <div class="form-group" style="margin-bottom:0">
@@ -146,7 +224,8 @@
 </div>
 
 <script>
-  const GEO_METHODS = ["city", "postal_code", "bounding_box", "center_radius"];
+  const GEO_METHODS = ["city", "state", "postal_code", "bounding_box", "center_radius"];
+
   function updateGeoFields() {
     const method = document.getElementById("geo_method").value;
     GEO_METHODS.forEach(function(m) {
@@ -154,6 +233,31 @@
       if (el) el.style.display = (m === method) ? "" : "none";
     });
   }
-  document.addEventListener("DOMContentLoaded", updateGeoFields);
+
+  function updateSource() {
+    const isWeb = document.querySelector('input[name="discovery_source"]:checked').value === "web_search";
+    document.getElementById("section-places").style.display = isWeb ? "none" : "";
+    document.getElementById("section-web").style.display = isWeb ? "" : "none";
+  }
+
+  // Keep the hidden HTMX country param in sync (always United States for now)
+  function syncStateParam(select) {
+    // HTMX picks up [name='state_country'] via hx-include — already set.
+    // Append the state value directly to the HTMX URL via hx-vals instead.
+    select.setAttribute("hx-vals", JSON.stringify({ state: select.value, country: "United States" }));
+    htmx.process(select);
+  }
+
+  // Check/uncheck all city checkboxes
+  function setCityChecks(checked) {
+    document.querySelectorAll('#city-checkboxes input[type="checkbox"]').forEach(function(cb) {
+      cb.checked = checked;
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    updateGeoFields();
+    updateSource();
+  });
 </script>
 {% endblock %}

@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Enum as SAEnum, Float, Integer, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base
-from src.models.enums import CampaignStatus, GeoMethod
+from src.models.enums import CampaignStatus, DiscoverySource, GeoMethod
 from src.models.mixins import TimestampMixin, UUIDPrimaryKey
 
 if TYPE_CHECKING:
@@ -27,6 +28,10 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     - ``POSTAL_CODE``   → ``geo_postal_code``
     - ``BOUNDING_BOX``  → ``geo_sw_lat/lng``, ``geo_ne_lat/lng``
     - ``CENTER_RADIUS`` → ``geo_center_lat/lng``, ``geo_radius_m``
+    - ``STATE``         → ``geo_state``, ``geo_country``, ``geo_cities_selected``
+
+    For ``WEB_SEARCH`` campaigns, geo fields are unused; ``search_queries``
+    holds the list of search strings to run against DuckDuckGo.
 
     Validation of required fields is enforced at the CLI layer, not by DB
     constraints, to keep the migration simple and avoid cross-column CHECKs.
@@ -43,12 +48,18 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
         index=True,
     )
 
-    # --- Discovery configuration ---
-    # geo_method is required at campaign creation; no Python-level default because
-    # the CLI always supplies one of the four GeoMethod values.
-    geo_method: Mapped[GeoMethod] = mapped_column(
-        SAEnum(GeoMethod, name="geomethod", values_callable=lambda x: [e.value for e in x]),
+    # --- Discovery source ---
+    discovery_source: Mapped[DiscoverySource] = mapped_column(
+        SAEnum(DiscoverySource, name="discoverysource", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
+        default=DiscoverySource.GOOGLE_PLACES,
+    )
+
+    # --- Discovery configuration ---
+    # geo_method is required for GOOGLE_PLACES campaigns; nullable for WEB_SEARCH.
+    geo_method: Mapped[Optional[GeoMethod]] = mapped_column(
+        SAEnum(GeoMethod, name="geomethod", values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
     )
     # Business type / niche used as the Places textQuery (e.g. "dentists").
     # Defaults to "dentists" in Python; migration renames column from specialty.
@@ -58,6 +69,11 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     geo_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     geo_postal_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     geo_country: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # --- State / multi-city fields ---
+    geo_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # JSONB list of city strings selected by the user, e.g. ["New York", "Buffalo"]
+    geo_cities_selected: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # --- Bounding-box fields (south-west and north-east corners) ---
     geo_sw_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -69,6 +85,10 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     geo_center_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     geo_center_lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     geo_radius_m: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # --- Web-search campaign fields (WEB_SEARCH discovery_source only) ---
+    # JSONB list of search query strings, e.g. ["luxury fashion online", "DTC fashion brand"]
+    search_queries: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     discovery_hits: Mapped[list[DiscoveryHit]] = relationship(
         "DiscoveryHit", back_populates="campaign"
