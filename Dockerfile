@@ -13,7 +13,8 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Install the package
+# Bust cache when dependencies change (increment when updating pyproject.toml)
+ARG CACHEBUST=2
 RUN pip install --no-cache-dir -e .
 
 # Create data directories
