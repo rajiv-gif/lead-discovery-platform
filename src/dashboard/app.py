@@ -36,6 +36,16 @@ app = FastAPI(
 # Signs and verifies the session cookie with SESSION_SECRET_KEY.
 # ---------------------------------------------------------------------------
 
+# In FastAPI, add_middleware applies in reverse order (last added = outermost = runs first).
+# SessionAuthMiddleware must be added FIRST so it ends up innermost (runs after SessionMiddleware).
+app.add_middleware(
+    SessionAuthMiddleware,
+    username=settings.dashboard_username,
+    password=settings.dashboard_password,
+)
+
+# SessionMiddleware added LAST so it is outermost and runs first,
+# making request.session available before SessionAuthMiddleware executes.
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret_key,
@@ -43,16 +53,6 @@ app.add_middleware(
     max_age=60 * 60 * 24 * 7,   # 7-day session
     same_site="lax",
     https_only=False,             # Railway terminates TLS; cookies come over HTTP internally
-)
-
-# ---------------------------------------------------------------------------
-# Auth middleware — redirects unauthenticated requests to /login
-# ---------------------------------------------------------------------------
-
-app.add_middleware(
-    SessionAuthMiddleware,
-    username=settings.dashboard_username,
-    password=settings.dashboard_password,
 )
 
 # Store a verifier on app.state so the login route can call .verify()
