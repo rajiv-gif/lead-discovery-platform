@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
+
+from fastapi.responses import HTMLResponse, Response
 
 from src.dashboard.deps import templates
 from src.db.session import get_session
@@ -18,7 +19,7 @@ from src.models.campaign import Campaign
 from src.models.company_lead import CompanyLead
 from src.models.contact import Contact
 from src.models.email import Email
-from src.models.enums import ReviewStatus
+from src.models.enums import ReviewStatus, ScoreBand
 from src.models.phone import Phone
 from src.review.actions import approve_lead, mark_needs_edit, reject_lead
 
@@ -148,3 +149,54 @@ async def review_needs_edit(
         mark_needs_edit(session, lead_id)
         session.commit()
     return _reviewed_card(lead_id, "needs-edit")
+
+
+# ---------------------------------------------------------------------------
+# Bulk action endpoints
+# ---------------------------------------------------------------------------
+
+
+def _refresh_response() -> Response:
+    """Tell HTMX to do a full page reload after a bulk action."""
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+
+@router.post("/campaigns/{campaign_id}/review/bulk/approve-all")
+async def bulk_approve_all(
+    campaign_id: uuid.UUID,
+    min_score: float = Query(default=_DEFAULT_MIN_SCORE),
+) -> Response:
+    """Approve every pending lead visible at the current min_score filter."""
+    with get_session() as session:
+        leads = session.execute(
+            select(CompanyLead).where(
+                CompanyLead.campaign_id == campaign_id,
+                CompanyLead.review_status == ReviewStatus.PENDING,
+                CompanyLead.score >= min_score,
+            )
+        ).scalars().all()
+        for lead in leads:
+            approve_lead(session, lead.id)
+        session.commit()
+    return _refresh_response()
+
+
+@router.post("/campaigns/{campaign_id}/review/bulk/reject-cold")
+async def bulk_reject_cold(
+    campaign_id: uuid.UUID,
+    min_score: float = Query(default=_DEFAULT_MIN_SCORE),
+) -> Response:
+    """Reject all pending COLD-band leads (score < 50) at the current filter."""
+    with get_session() as session:
+        leads = session.execute(
+            select(CompanyLead).where(
+                CompanyLead.campaign_id == campaign_id,
+                CompanyLead.review_status == ReviewStatus.PENDING,
+                CompanyLead.score >= min_score,
+                CompanyLead.score_band == ScoreBand.COLD,
+            )
+        ).scalars().all()
+        for lead in leads:
+            reject_lead(session, lead.id)
+        session.commit()
+    return _refresh_response()

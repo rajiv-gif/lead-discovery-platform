@@ -4,23 +4,42 @@
 {% block content %}
 <a href="/campaigns/{{ campaign.id }}" class="page-back">← {{ campaign.name }}</a>
 
-<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap">
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap">
   <div>
     <h1>Review Queue</h1>
     <p class="muted" style="font-size:.88rem; margin-top:.3rem">
       {{ lead_data | length }} lead{{ 's' if lead_data|length != 1 else '' }} · score ≥ {{ min_score }}
     </p>
   </div>
-  <form method="get" action="/campaigns/{{ campaign.id }}/review"
-        style="display:flex; gap:.5rem; align-items:flex-end">
-    <div>
-      <label class="form-label" for="min_score" style="margin-bottom:.3rem">Min score</label>
-      <input class="form-input" type="number" id="min_score" name="min_score"
-             value="{{ min_score }}" min="0" max="115" step="1"
-             style="width:5.5rem">
-    </div>
-    <button type="submit" class="btn btn-ghost btn-sm" style="margin-bottom:1px">Filter</button>
-  </form>
+  <div style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
+    {% if lead_data %}
+    <button class="btn btn-green btn-sm"
+      hx-post="/campaigns/{{ campaign.id }}/review/bulk/approve-all?min_score={{ min_score }}"
+      hx-confirm="Approve all {{ lead_data | length }} visible lead{{ 's' if lead_data|length != 1 else '' }}?"
+      title="Approve all visible leads">
+      ✓ Approve all
+    </button>
+    {% set cold_count = lead_data | selectattr('lead.score_band.value', 'equalto', 'cold') | list | length %}
+    {% if cold_count > 0 %}
+    <button class="btn btn-red btn-sm"
+      hx-post="/campaigns/{{ campaign.id }}/review/bulk/reject-cold?min_score={{ min_score }}"
+      hx-confirm="Reject {{ cold_count }} cold lead{{ 's' if cold_count != 1 else '' }} (score < 50)?"
+      title="Reject all cold-band leads">
+      ✗ Reject cold ({{ cold_count }})
+    </button>
+    {% endif %}
+    {% endif %}
+    <form method="get" action="/campaigns/{{ campaign.id }}/review"
+          style="display:flex; gap:.5rem; align-items:flex-end">
+      <div>
+        <label class="form-label" for="min_score" style="margin-bottom:.3rem">Min score</label>
+        <input class="form-input" type="number" id="min_score" name="min_score"
+               value="{{ min_score }}" min="0" max="115" step="1"
+               style="width:5.5rem">
+      </div>
+      <button type="submit" class="btn btn-ghost btn-sm" style="margin-bottom:1px">Filter</button>
+    </form>
+  </div>
 </div>
 
 {% if not lead_data %}
