@@ -19,11 +19,8 @@ RUN pip install --no-cache-dir -e .
 # Create data directories
 RUN mkdir -p data/pages data/llm_runs data/exports data/website_checks
 
-# Railway injects PORT; DASHBOARD_PORT reads it.
 # DASHBOARD_HOST must be 0.0.0.0 for Railway to route traffic in.
+# Railway injects $PORT at runtime — CMD uses it directly.
 ENV DASHBOARD_HOST=0.0.0.0
-ENV DASHBOARD_PORT=8000
 
-EXPOSE 8000
-
-CMD ["leads-ui"]
+CMD ["sh", "-c", "uvicorn src.dashboard.app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
