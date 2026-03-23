@@ -1,50 +1,64 @@
-"""HTTP Basic Auth middleware for the dashboard.
+"""Session-based authentication for the dashboard.
 
-Enabled when both DASHBOARD_USERNAME and DASHBOARD_PASSWORD are set in the
-environment. If either is unset, all requests pass through unauthenticated
-(safe for local use behind 127.0.0.1).
+How it works:
+  1. SessionMiddleware (Starlette) signs a cookie with SESSION_SECRET_KEY.
+  2. SessionAuthMiddleware checks request.session["authenticated"] on every
+     request except exempt paths. Unauthenticated requests are redirected to
+     /login?next=<original_path>.
+  3. /login accepts POST with username + password, sets the session flag, then
+     redirects to ?next or /.
+  4. /logout clears the session and redirects to /login.
 
-The /healthz endpoint is always exempt so Railway's health checks work
-without credentials.
+Env vars (all optional for local dev, required for Railway):
+  DASHBOARD_USERNAME   — required to enforce credentials
+  DASHBOARD_PASSWORD   — required to enforce credentials
+  SESSION_SECRET_KEY   — secret used to sign the cookie (use a long random string)
+
+If DASHBOARD_USERNAME or DASHBOARD_PASSWORD are unset, any submitted credentials
+are accepted (useful for local dev without env setup).
 """
 from __future__ import annotations
 
-import base64
 import secrets
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import RedirectResponse, Response
 
-_EXEMPT_PATHS = {"/healthz"}
+# Paths that never require authentication
+_EXEMPT = {"/login", "/healthz"}
 
 
-class BasicAuthMiddleware(BaseHTTPMiddleware):
-    """Require HTTP Basic Auth on all routes except exempt paths."""
+class SessionAuthMiddleware(BaseHTTPMiddleware):
+    """Redirect unauthenticated requests to /login."""
 
-    def __init__(self, app, username: str, password: str) -> None:
+    def __init__(self, app, username: str | None, password: str | None) -> None:
         super().__init__(app)
         self._username = username
         self._password = password
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.url.path in _EXEMPT_PATHS:
+        path = request.url.path
+
+        # Always allow exempt paths
+        if path in _EXEMPT:
             return await call_next(request)
 
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Basic "):
-            try:
-                decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
-                username, _, password = decoded.partition(":")
-                user_ok = secrets.compare_digest(username, self._username)
-                pass_ok = secrets.compare_digest(password, self._password)
-                if user_ok and pass_ok:
-                    return await call_next(request)
-            except Exception:
-                pass
+        # Check session
+        if request.session.get("authenticated"):
+            return await call_next(request)
 
-        return Response(
-            content="Unauthorized",
-            status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="Lead Discovery Dashboard"'},
-        )
+        # Not authenticated — redirect to login, preserving the intended path
+        next_url = request.url.path
+        if request.url.query:
+            next_url = f"{next_url}?{request.url.query}"
+        return RedirectResponse(url=f"/login?next={next_url}", status_code=302)
+
+    def verify(self, username: str, password: str) -> bool:
+        """Return True if credentials are valid."""
+        if not self._username or not self._password:
+            # No credentials configured — accept anything (dev mode)
+            return True
+        user_ok = secrets.compare_digest(username, self._username)
+        pass_ok = secrets.compare_digest(password, self._password)
+        return user_ok and pass_ok
