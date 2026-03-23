@@ -37,12 +37,11 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Create the pagetype enum type
-    conn.execute(
-        sa.text(
-            "CREATE TYPE pagetype AS ENUM "
-            "('homepage', 'about', 'contact', 'team', 'services', 'other')"
-        )
-    )
+    conn.execute(sa.text(
+        "DO $$ BEGIN CREATE TYPE pagetype AS ENUM "
+        "('homepage', 'about', 'contact', 'team', 'services', 'other'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+    ))
 
     # 2. company_pages — add page_type (nullable enum, indexed)
     op.add_column(

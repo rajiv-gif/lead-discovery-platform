@@ -40,12 +40,11 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Create the geomethod enum type
-    conn.execute(
-        sa.text(
-            "CREATE TYPE geomethod AS ENUM "
-            "('city', 'postal_code', 'bounding_box', 'center_radius')"
-        )
-    )
+    conn.execute(sa.text(
+        "DO $$ BEGIN CREATE TYPE geomethod AS ENUM "
+        "('city', 'postal_code', 'bounding_box', 'center_radius'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+    ))
 
     # 2. campaigns — add geo_method (NOT NULL needs two-step: add nullable → backfill → set NOT NULL)
     op.add_column(

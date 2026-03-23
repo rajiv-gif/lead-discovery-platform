@@ -83,10 +83,13 @@ def _sa_enum(name: str) -> sa.Enum:
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # 1. Create all PostgreSQL enum types before any table
+    # 1. Create all PostgreSQL enum types before any table (idempotent)
     for type_name, values in _ENUM_TYPES:
         quoted = ", ".join(f"'{v}'" for v in values)
-        conn.execute(sa.text(f"CREATE TYPE {type_name} AS ENUM ({quoted})"))
+        conn.execute(sa.text(
+            f"DO $$ BEGIN CREATE TYPE {type_name} AS ENUM ({quoted}); "
+            f"EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+        ))
 
     # 2. campaigns (no FKs)
     op.create_table(
