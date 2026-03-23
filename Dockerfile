@@ -11,7 +11,7 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Force fresh install — bypasses any stale layer cache
+# Install all dependencies explicitly to avoid stale layer cache issues
 RUN pip install --no-cache-dir \
     sqlalchemy>=2.0 \
     alembic>=1.13 \
@@ -37,4 +37,5 @@ RUN mkdir -p data/pages data/llm_runs data/exports data/website_checks
 
 ENV DASHBOARD_HOST=0.0.0.0
 
-CMD ["leads-ui"]
+# Run migrations then start the app
+CMD ["sh", "-c", "alembic upgrade head && leads-ui"]
