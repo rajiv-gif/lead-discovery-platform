@@ -2,65 +2,79 @@
 {% block title %}Export — {{ campaign.name }} — Lead Discovery{% endblock %}
 
 {% block content %}
-<h2>Export — {{ campaign.name }}</h2>
+<a href="/campaigns/{{ campaign.id }}" class="page-back">← {{ campaign.name }}</a>
 
-<!-- Lead summary bar -->
-<div style="margin-bottom:1.5rem; padding:1rem; background:var(--pico-card-background-color); border-radius:var(--pico-border-radius)">
-  <strong>Approved leads: {{ lead_summary.total }}</strong>
-  <span style="color:var(--pico-muted-color); margin-left:1rem">
-    Qualified: {{ lead_summary.qualified }} ·
-    Contacted: {{ lead_summary.contacted }} ·
-    Converted: {{ lead_summary.converted }}
-  </span>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.75rem; flex-wrap:wrap">
+  <div>
+    <h1>Export</h1>
+    <p class="muted" style="font-size:.88rem; margin-top:.3rem">{{ campaign.name }}</p>
+  </div>
+</div>
+
+<!-- Lead summary -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:.75rem; margin-bottom:1.75rem">
+  {% set summary_items = [
+    ("Approved", lead_summary.total),
+    ("Qualified", lead_summary.qualified),
+    ("Contacted", lead_summary.contacted),
+    ("Converted", lead_summary.converted),
+  ] %}
+  {% for label, value in summary_items %}
+  <div class="card" style="padding:.85rem 1rem; text-align:center">
+    <div class="mono" style="font-size:1.5rem; font-weight:500; color:{% if value > 0 %}var(--text){% else %}var(--text-3){% endif %}">{{ value }}</div>
+    <div class="muted" style="font-size:.72rem; margin-top:.2rem; text-transform:uppercase; letter-spacing:.05em">{{ label }}</div>
+  </div>
+  {% endfor %}
 </div>
 
 {% if error %}
-<div class="error-banner">Export failed: {{ error }}</div>
+<div class="alert alert-error">Export failed: {{ error }}</div>
 {% endif %}
 
 {% if generated %}
-<div class="success-banner">
+<div class="alert alert-success" style="margin-bottom:1.5rem">
   Export complete.
-  {% if generated.contacts_rows is not none %}
-  <br>Named contacts: {{ generated.contacts_rows }} rows.
-  {% endif %}
-  {% if generated.companies_rows is not none %}
-  Company fallback: {{ generated.companies_rows }} rows.
-  {% endif %}
-  {% if generated.leads_rows is not none %}
-  Full leads: {{ generated.leads_rows }} rows.
-  {% endif %}
+  {% if generated.contacts_rows is not none %} Named contacts: {{ generated.contacts_rows }} rows.{% endif %}
+  {% if generated.companies_rows is not none %} Company fallback: {{ generated.companies_rows }} rows.{% endif %}
+  {% if generated.leads_rows is not none %} Full leads: {{ generated.leads_rows }} rows.{% endif %}
 </div>
 {% endif %}
 
-<!-- Generate button -->
-{% if lead_summary.total > 0 %}
-<form method="post" action="/campaigns/{{ campaign.id }}/export/generate" style="margin-bottom:2rem">
-  <button type="submit">⬇ Generate CSVs (all three files)</button>
-</form>
-{% else %}
-<p><em>No approved leads to export yet. Approve leads in the review queue first.</em></p>
-{% endif %}
+<div class="card" style="margin-bottom:1.75rem">
+  <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:.75rem">Generate CSVs</div>
+  {% if lead_summary.total > 0 %}
+  <p class="muted" style="font-size:.85rem; margin-bottom:1rem">
+    Exports three files: named contacts, company-level fallback, and full leads with scores.
+  </p>
+  <form method="post" action="/campaigns/{{ campaign.id }}/export/generate">
+    <button type="submit" class="btn btn-primary">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v8M3 6l3.5 3.5L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="12" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Generate CSVs
+    </button>
+  </form>
+  {% else %}
+  <p class="muted" style="font-size:.85rem">No approved leads to export yet. Approve leads in the review queue first.</p>
+  {% endif %}
+</div>
 
-<!-- Previous exports -->
 {% if previous %}
-<h3>Previous exports</h3>
-<figure>
-  <table>
+<div class="card">
+  <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:.85rem">Previous exports</div>
+  <table class="data-table">
     <thead>
       <tr>
         <th>File</th>
         <th>Size</th>
-        <th></th>
+        <th style="text-align:right">Download</th>
       </tr>
     </thead>
     <tbody>
       {% for f in previous %}
       <tr>
-        <td><code>{{ f.name }}</code></td>
-        <td>{{ f.size_kb }} KB</td>
-        <td>
-          <a href="/campaigns/{{ campaign.id }}/export/download?file={{ f.name }}">
+        <td><span class="mono" style="font-size:.8rem; color:var(--text-2)">{{ f.name }}</span></td>
+        <td><span class="muted" style="font-size:.82rem">{{ f.size_kb }} KB</span></td>
+        <td style="text-align:right">
+          <a href="/campaigns/{{ campaign.id }}/export/download?file={{ f.name }}" class="btn btn-ghost btn-sm">
             ↓ Download
           </a>
         </td>
@@ -68,12 +82,8 @@
       {% endfor %}
     </tbody>
   </table>
-</figure>
+</div>
 {% else %}
-<p style="color:var(--pico-muted-color)">No exports yet for this campaign.</p>
+<p class="muted" style="font-size:.85rem">No exports yet for this campaign.</p>
 {% endif %}
-
-<p style="margin-top:2rem">
-  <a href="/campaigns/{{ campaign.id }}">← Back to campaign</a>
-</p>
 {% endblock %}

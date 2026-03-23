@@ -59,7 +59,7 @@ class Email(UUIDPrimaryKey, TimestampMixin, Base):
     )
     address: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     status: Mapped[EmailStatus] = mapped_column(
-        SAEnum(EmailStatus, name="emailstatus"),
+        SAEnum(EmailStatus, name="emailstatus", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EmailStatus.UNVERIFIED,
     )

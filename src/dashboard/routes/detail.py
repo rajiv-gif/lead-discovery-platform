@@ -6,11 +6,16 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from fastapi.responses import RedirectResponse
+
 from src.dashboard.deps import STAGE_ERROR_HINTS, get_stage_counts, templates
 from src.dashboard.persistence import get_last_run
 from src.dashboard.tasks import registry
 from src.db.session import get_session
 from src.models.campaign import Campaign
+from src.models.company_lead import CompanyLead
+from src.models.discovery_hit import DiscoveryHit
+from src.models.pipeline_run import PipelineRun
 
 router = APIRouter()
 
@@ -63,6 +68,18 @@ def _build_stage_rows(counts: dict) -> list[dict]:
     ]
 
 
+@router.post("/campaigns/{campaign_id}/delete")
+async def campaign_delete(campaign_id: uuid.UUID):
+    with get_session() as session:
+        session.query(PipelineRun).filter_by(campaign_id=campaign_id).delete()
+        session.query(CompanyLead).filter_by(campaign_id=campaign_id).delete()
+        session.query(DiscoveryHit).filter_by(campaign_id=campaign_id).delete()
+        campaign = session.get(Campaign, campaign_id)
+        if campaign:
+            session.delete(campaign)
+    return RedirectResponse("/", status_code=303)
+
+
 @router.get("/campaigns/{campaign_id}", response_class=HTMLResponse)
 async def campaign_detail(request: Request, campaign_id: uuid.UUID) -> HTMLResponse:
     with get_session() as session:
@@ -94,6 +111,7 @@ async def campaign_detail(request: Request, campaign_id: uuid.UUID) -> HTMLRespo
         "campaigns/detail.html",
         {
             "campaign": campaign,
+            "campaign_id": campaign_id,
             "stage_rows": stage_rows,
             "counts": counts,
             "task_running": task_running,

@@ -3,9 +3,9 @@
 Each strategy translates a Campaign's geo configuration into one or more
 ``GeoQuery`` objects that can be passed directly to ``PlacesClient.search()``.
 
-All strategies currently return a single-element list. The list wrapper is
-intentional — future phases may split large geographies into sub-queries
-(e.g. grid tiles for large bounding boxes) without changing callers.
+STATE mode returns one GeoQuery per selected city, enabling full state-level
+coverage in a single campaign run. All other methods return a single-element
+list. The list wrapper is intentional — callers never need to change.
 """
 from __future__ import annotations
 
@@ -16,6 +16,62 @@ from src.models.enums import GeoMethod
 
 if TYPE_CHECKING:
     from src.models.campaign import Campaign
+
+
+# ---------------------------------------------------------------------------
+# Niche → Places includedType map
+# ---------------------------------------------------------------------------
+
+# Maps common niche strings (lower-cased) to valid Places API includedType
+# values.  If a niche is not in this map, includedType is omitted so the text
+# query alone drives filtering — this is always safe but slightly less precise.
+#
+# Only add values that exist in the Places API type taxonomy:
+# https://developers.google.com/maps/documentation/places/web-service/place-types
+_NICHE_PLACES_TYPE: dict[str, str] = {
+    "dentist": "dentist",
+    "dentists": "dentist",
+    "orthodontist": "orthodontist",
+    "orthodontists": "orthodontist",
+    "plumber": "plumber",
+    "plumbers": "plumber",
+    "electrician": "electrician",
+    "electricians": "electrician",
+    "lawyer": "lawyer",
+    "lawyers": "lawyer",
+    "attorney": "lawyer",
+    "attorneys": "lawyer",
+    "accountant": "accounting",
+    "accountants": "accounting",
+    "restaurant": "restaurant",
+    "restaurants": "restaurant",
+    "gym": "gym",
+    "gyms": "gym",
+    "salon": "hair_salon",
+    "hair salon": "hair_salon",
+    "barber": "barber_shop",
+    "barbers": "barber_shop",
+    "pharmacy": "pharmacy",
+    "pharmacies": "pharmacy",
+    "optometrist": "optometrist",
+    "optometrists": "optometrist",
+    "chiropractor": "chiropractor",
+    "chiropractors": "chiropractor",
+    "veterinarian": "veterinary_care",
+    "vet": "veterinary_care",
+    "real estate": "real_estate_agency",
+    "realtor": "real_estate_agency",
+    "insurance": "insurance_agency",
+    "hotel": "hotel",
+    "hotels": "hotel",
+    "spa": "spa",
+    "spas": "spa",
+}
+
+
+def _places_type_for_niche(niche: str) -> Optional[str]:
+    """Return the Places API includedType for *niche*, or None if unknown."""
+    return _NICHE_PLACES_TYPE.get(niche.lower().strip())
 
 
 # ---------------------------------------------------------------------------
@@ -30,19 +86,19 @@ class GeoQuery:
     Attributes:
         text_query: The ``textQuery`` field sent to the Places API.
         location_restriction: Optional ``locationRestriction`` body fragment
-            (rectangle or circle). None for city/postal_code modes, which rely
-            on the text query alone for geographic bias.
+            (rectangle or circle). None for city/postal_code/state modes, which
+            rely on the text query alone for geographic bias.
         method: Lowercase ``GeoMethod`` value; stored verbatim on
             ``DiscoveryHit.discovery_method`` for audit/debugging.
         center_lat: Geographic centre latitude of the query region, or None
-            for modes that do not specify a coordinate (city, postal_code).
+            for modes that do not specify a coordinate (city, postal_code, state).
         center_lng: Geographic centre longitude of the query region, or None.
         radius_m: Query radius in metres, or None for non-circle queries.
         included_type: Optional Places API ``includedType`` filter.  When set,
             the API returns only places whose type list contains this value,
             ANDed with ``textQuery``.  Uses the singular Places type name
-            (e.g. ``"dentist"``).  Phase 1 always sets this to ``"dentist"``
-            to exclude non-dental results (equipment suppliers, schools, etc.).
+            (e.g. ``"dentist"``).  Derived from the campaign niche via
+            ``_places_type_for_niche()``; None for unknown niches.
     """
 
     text_query: str
@@ -65,6 +121,9 @@ def build_queries(campaign: Campaign) -> list[GeoQuery]:
     Dispatches on ``campaign.geo_method`` and calls the appropriate
     private builder.
 
+    For STATE mode, returns one GeoQuery per selected city.
+    All other modes return a single-element list.
+
     Raises:
         ValueError: If a required geo field for the chosen method is missing.
     """
@@ -78,6 +137,8 @@ def build_queries(campaign: Campaign) -> list[GeoQuery]:
         return _bounding_box_queries(campaign)
     if method == GeoMethod.CENTER_RADIUS:
         return _center_radius_queries(campaign)
+    if method == GeoMethod.STATE:
+        return _state_queries(campaign)
 
     raise ValueError(f"Unsupported geo method: {method!r}")  # pragma: no cover
 
@@ -92,7 +153,7 @@ def _city_queries(campaign: Campaign) -> list[GeoQuery]:
         raise ValueError(
             f"Campaign {campaign.id}: geo_city and geo_country are required for CITY mode"
         )
-    text_query = f"{campaign.specialty} in {campaign.geo_city}, {campaign.geo_country}"
+    text_query = f"{campaign.niche} in {campaign.geo_city}, {campaign.geo_country}"
     return [
         GeoQuery(
             text_query=text_query,
@@ -101,7 +162,7 @@ def _city_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=None,
             center_lng=None,
             radius_m=None,
-            included_type="dentist",
+            included_type=_places_type_for_niche(campaign.niche),
         )
     ]
 
@@ -111,7 +172,7 @@ def _postal_code_queries(campaign: Campaign) -> list[GeoQuery]:
         raise ValueError(
             f"Campaign {campaign.id}: geo_postal_code is required for POSTAL_CODE mode"
         )
-    text_query = f"{campaign.specialty} in {campaign.geo_postal_code}"
+    text_query = f"{campaign.niche} in {campaign.geo_postal_code}"
     return [
         GeoQuery(
             text_query=text_query,
@@ -120,7 +181,7 @@ def _postal_code_queries(campaign: Campaign) -> list[GeoQuery]:
             center_lat=None,
             center_lng=None,
             radius_m=None,
-            included_type="dentist",
+            included_type=_places_type_for_niche(campaign.niche),
         )
     ]
 
@@ -147,18 +208,17 @@ def _bounding_box_queries(campaign: Campaign) -> list[GeoQuery]:
             },
         }
     }
-    # Geometric centre of the bounding box — stored on discovery_hits for audit.
     center_lat = (campaign.geo_sw_lat + campaign.geo_ne_lat) / 2
     center_lng = (campaign.geo_sw_lng + campaign.geo_ne_lng) / 2
     return [
         GeoQuery(
-            text_query=campaign.specialty,
+            text_query=campaign.niche,
             location_restriction=location_restriction,
             method=GeoMethod.BOUNDING_BOX.value,
             center_lat=center_lat,
             center_lng=center_lng,
             radius_m=None,
-            included_type="dentist",
+            included_type=_places_type_for_niche(campaign.niche),
         )
     ]
 
@@ -183,12 +243,46 @@ def _center_radius_queries(campaign: Campaign) -> list[GeoQuery]:
     }
     return [
         GeoQuery(
-            text_query=campaign.specialty,
+            text_query=campaign.niche,
             location_restriction=location_restriction,
             method=GeoMethod.CENTER_RADIUS.value,
             center_lat=campaign.geo_center_lat,
             center_lng=campaign.geo_center_lng,
             radius_m=campaign.geo_radius_m,
-            included_type="dentist",
+            included_type=_places_type_for_niche(campaign.niche),
         )
     ]
+
+
+def _state_queries(campaign: Campaign) -> list[GeoQuery]:
+    """Return one GeoQuery per selected city in the chosen state.
+
+    Requires geo_state, geo_country, and geo_cities_selected on the campaign.
+    geo_cities_selected must be a non-empty list of city name strings.
+    """
+    if not campaign.geo_state or not campaign.geo_country:
+        raise ValueError(
+            f"Campaign {campaign.id}: geo_state and geo_country are required for STATE mode"
+        )
+    cities: list[str] = campaign.geo_cities_selected or []
+    if not cities:
+        raise ValueError(
+            f"Campaign {campaign.id}: geo_cities_selected must have at least one city for STATE mode"
+        )
+
+    included_type = _places_type_for_niche(campaign.niche)
+    queries = []
+    for city in cities:
+        text_query = f"{campaign.niche} in {city}, {campaign.geo_state}, {campaign.geo_country}"
+        queries.append(
+            GeoQuery(
+                text_query=text_query,
+                location_restriction=None,
+                method=GeoMethod.STATE.value,
+                center_lat=None,
+                center_lng=None,
+                radius_m=None,
+                included_type=included_type,
+            )
+        )
+    return queries

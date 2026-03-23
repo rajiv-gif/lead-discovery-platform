@@ -64,7 +64,7 @@ class Phone(UUIDPrimaryKey, TimestampMixin, Base):
     # Raw string as extracted before normalisation
     raw_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     phone_type: Mapped[PhoneType] = mapped_column(
-        SAEnum(PhoneType, name="phonetype"),
+        SAEnum(PhoneType, name="phonetype", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=PhoneType.UNKNOWN,
     )

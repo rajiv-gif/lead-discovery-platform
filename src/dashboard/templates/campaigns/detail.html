@@ -2,38 +2,80 @@
 {% block title %}{{ campaign.name }} — Lead Discovery{% endblock %}
 
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem">
-  <h2>{{ campaign.name }}</h2>
-  <span class="badge badge-{{ campaign.status.value }}">{{ campaign.status.value }}</span>
+<a href="/" class="page-back">← Campaigns</a>
+
+<!-- Campaign header -->
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.75rem; flex-wrap:wrap">
+  <div>
+    <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:.4rem">
+      <h1>{{ campaign.name }}</h1>
+      <span class="badge badge-{{ campaign.status.value }}">{{ campaign.status.value }}</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap">
+      <span class="mono muted" style="font-size:.82rem">{{ campaign.niche }}</span>
+      <span class="muted" style="font-size:.82rem">·</span>
+      <span class="muted" style="font-size:.82rem">{{ campaign.geo_method.value }}{% if campaign.geo_city %} · {{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}{% endif %}</span>
+    </div>
+  </div>
+  <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+    {% if counts.total_leads > 0 %}
+    <a href="/campaigns/{{ campaign.id }}/review" class="btn btn-secondary btn-sm">
+      Review
+      {% if counts.pending_review > 0 %}
+      <span style="background:var(--accent); color:#06090f; border-radius:9999px; font-size:.7rem; padding:.05em .45em; font-family:var(--font-mono)">{{ counts.pending_review }}</span>
+      {% endif %}
+    </a>
+    {% else %}
+    <button class="btn btn-secondary btn-sm" disabled title="Run pipeline stages first">Review</button>
+    {% endif %}
+    <a href="/campaigns/{{ campaign.id }}/export" class="btn btn-ghost btn-sm">Export →</a>
+    <form method="post" action="/campaigns/{{ campaign.id }}/delete"
+          onsubmit="return confirm('Delete campaign "{{ campaign.name }}"? This removes all discovery hits and leads and cannot be undone.')">
+      <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--red); border-color:rgba(248,113,113,.3)">Delete</button>
+    </form>
+  </div>
 </div>
-<p style="color:var(--pico-muted-color); margin-bottom:1.5rem">
-  {{ campaign.specialty }} · {{ campaign.geo_method.value }}
-  {% if campaign.geo_city %} · {{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}{% endif %}
-</p>
 
-<!-- Stage status table (HTMX swap target) -->
-<div id="stage-status">
-  {% include "partials/stage_status.html" %}
+<!-- Stats row -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:.75rem; margin-bottom:1.75rem">
+  {% set stats = [
+    ("Discovered", counts.total_hits),
+    ("Scraped",    counts.scraped),
+    ("Extracted",  counts.extracted),
+    ("Emails verified", counts.verified_emails),
+    ("Leads",      counts.total_leads),
+    ("Approved",   counts.approved),
+  ] %}
+  {% for label, value in stats %}
+  <div class="card" style="padding:.85rem 1rem; text-align:center">
+    <div class="mono" style="font-size:1.5rem; font-weight:500; color:var(--text)">{{ value }}</div>
+    <div class="muted" style="font-size:.72rem; margin-top:.2rem; text-transform:uppercase; letter-spacing:.05em">{{ label }}</div>
+  </div>
+  {% endfor %}
 </div>
 
-<!-- Navigation links -->
-<div style="display:flex; gap:1rem; margin-top:1.5rem">
-  {% if counts.total_leads > 0 %}
-  <a href="/campaigns/{{ campaign.id }}/review" role="button" class="secondary">
-    Review leads ({{ counts.pending_review }} pending)
-  </a>
-  {% else %}
-  <button disabled class="secondary" title="Run pipeline stages first">
-    Review leads
-  </button>
-  {% endif %}
-
-  <a href="/campaigns/{{ campaign.id }}/export" role="button" class="secondary">
-    Export →
-  </a>
+<!-- Stage pipeline (HTMX swap target) -->
+<div class="card" style="margin-bottom:1rem">
+  <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Pipeline stages</div>
+  <div id="stage-status">
+    {% include "partials/stage_status.html" %}
+  </div>
 </div>
 
-<p style="margin-top:2rem">
-  <a href="/">← All campaigns</a>
-</p>
+<!-- Live log panel -->
+<div class="card" style="padding:0; overflow:hidden">
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:.85rem 1.25rem; border-bottom:1px solid var(--border)">
+    <span style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3)">
+      Live logs
+    </span>
+    {% if task_running %}
+    <span style="display:flex; align-items:center; gap:.4rem; font-size:.75rem; color:var(--accent)">
+      <span class="running-indicator">●</span> running
+    </span>
+    {% endif %}
+  </div>
+  <div id="log-panel">
+    {% include "partials/log_panel.html" %}
+  </div>
+</div>
 {% endblock %}

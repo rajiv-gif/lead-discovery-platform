@@ -47,6 +47,18 @@ class GeoMethod(str, enum.Enum):
     POSTAL_CODE = "postal_code"
     BOUNDING_BOX = "bounding_box"
     CENTER_RADIUS = "center_radius"
+    STATE = "state"
+
+
+class DiscoverySource(str, enum.Enum):
+    """Primary discovery source for a campaign.
+
+    GOOGLE_PLACES — local-business discovery via Google Places API (default).
+    WEB_SEARCH    — ecommerce / online-brand discovery via web search (DuckDuckGo).
+    """
+
+    GOOGLE_PLACES = "google_places"
+    WEB_SEARCH = "web_search"
 
 
 class EmailStatus(str, enum.Enum):

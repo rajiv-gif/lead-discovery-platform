@@ -56,12 +56,12 @@ class DiscoveryHit(UUIDPrimaryKey, TimestampMixin, Base):
     )
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[DiscoveryHitSourceType] = mapped_column(
-        SAEnum(DiscoveryHitSourceType, name="discoveryhitsourcetype"),
+        SAEnum(DiscoveryHitSourceType, name="discoveryhitsourcetype", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=DiscoveryHitSourceType.MANUAL,
     )
     status: Mapped[DiscoveryHitStatus] = mapped_column(
-        SAEnum(DiscoveryHitStatus, name="discoveryhitstatus"),
+        SAEnum(DiscoveryHitStatus, name="discoveryhitstatus", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=DiscoveryHitStatus.PENDING,
         index=True,

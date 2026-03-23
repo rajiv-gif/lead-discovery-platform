@@ -33,13 +33,13 @@ class SuppressionList(UUIDPrimaryKey, TimestampMixin, Base):
     )
 
     suppression_type: Mapped[SuppressionType] = mapped_column(
-        SAEnum(SuppressionType, name="suppressiontype"),
+        SAEnum(SuppressionType, name="suppressiontype", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         index=True,
     )
     value: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reason: Mapped[SuppressionReason] = mapped_column(
-        SAEnum(SuppressionReason, name="suppressionreason"),
+        SAEnum(SuppressionReason, name="suppressionreason", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

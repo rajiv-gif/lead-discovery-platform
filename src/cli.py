@@ -47,9 +47,9 @@ def create_campaign(
         ..., "--geo-method", "-g",
         help="Geo targeting method: city | postal_code | bounding_box | center_radius",
     ),
-    specialty: str = typer.Option(
-        "dentists", "--specialty", "-s",
-        help="Business type to search for (default: dentists).",
+    niche: str = typer.Option(
+        "dentists", "--niche", "-n",
+        help="Business niche / type to search for (default: dentists).",
     ),
     description: Optional[str] = typer.Option(None, "--description", "-d", help="Campaign description."),
     # city / postal_code options
@@ -119,7 +119,7 @@ def create_campaign(
             description=description,
             status=CampaignStatus.DRAFT,
             geo_method=geo_method_enum,
-            specialty=specialty,
+            niche=niche,
             geo_city=city,
             geo_country=country,
             geo_postal_code=postal_code,
@@ -139,7 +139,7 @@ def create_campaign(
     console.print(f"  ID:         [bold]{campaign_id}[/bold]")
     console.print(f"  Name:       {name}")
     console.print(f"  Geo method: {geo_method_enum.value}")
-    console.print(f"  Specialty:  {specialty}")
+    console.print(f"  Niche:      {niche}")
     console.print(f"  Status:     draft\n")
     console.print(f"Run discovery with:")
     console.print(f"  [bold]leads run-discovery --campaign-id {campaign_id}[/bold]\n")

@@ -1,0 +1,41 @@
+
+▶  SCRAPE
+────────────────────────────────────────────────────────────
+22:37:49  WARNING  src.scraper.runner — hit 79efcd0c-22c7-4cef-8080-9aa15032b370: homepage fetch failed for 'https://tribecadentalstudio.com/' — disallowed by robots.txt
+22:37:50  WARNING  src.scraper.runner — hit 8040196c-cd71-49eb-80be-d8971d58325a: homepage fetch failed for 'http://dentistonmadison.com/?utm_campaign=gmb' — disallowed by robots.txt
+22:37:51  WARNING  src.scraper.runner — hit dc2ceeb5-775d-4177-9156-4b5dcd91ace9: homepage fetch failed for 'http://dental.nyu.edu/' — disallowed by robots.txt
+22:38:11  WARNING  src.scraper.runner — hit a2caafce-5c4b-4b67-8ade-90a879155a8b: homepage fetch failed for 'https://newyorkdentalgrp.com/?utm_campaign=gmb' — disallowed by robots.txt
+22:38:11  WARNING  src.scraper.runner — hit 6126ea52-7e3c-4b5c-a027-a12032eccfa8: homepage fetch failed for 'https://citydentalnyc.com/?utm_source=gbp&utm_medium=organic&utm_campaign=gbp-listing' — disallowed by robots.txt
+22:38:11  WARNING  src.scraper.runner — hit 1df54bb2-5d61-423a-8c7a-db013e64affb: homepage fetch failed for 'http://tribecaadvanceddentistry.com/' — disallowed by robots.txt
+22:38:18  WARNING  src.scraper.runner — hit ff7dcdf0-425d-4c18-b1f0-1e9db1bfe68b: homepage fetch failed for 'https://gramercydental.nyc/' — disallowed by robots.txt
+22:38:25  WARNING  src.scraper.runner — hit 0db7f2c8-609c-4181-8c96-d65e89ea5c00: homepage fetch failed for 'https://www.sohosmile.com/?utm_source=google&utm_medium=organic&utm_campaign=gmb' — disallowed by robots.txt
+22:39:11  WARNING  src.scraper.runner — hit f8d3e757-5005-42a7-9b81-e1d9b6761084: homepage fetch failed for 'https://grouphealthdental.com/' — disallowed by robots.txt
+22:39:24  WARNING  src.scraper.runner — hit 9633ef43-33e7-4d43-9c43-d9305cf59df6: homepage fetch failed for 'https://www.209nycdental.com/?utm_source=google&utm_medium=organic&utm_campaign=gmb' — disallowed by robots.txt
+22:39:36  WARNING  src.scraper.runner — hit 387e9fba-edb3-47b2-af82-32adbec1f1bd: homepage fetch failed for 'https://www.newyorkdentaloffice.com/' — disallowed by robots.txt
+22:39:36  WARNING  src.scraper.runner — hit 45858c62-862f-40f9-be14-35593007536f: homepage fetch failed for 'https://newyorkgeneraldentistry.com/?utm_source=GMBlisting&utm_medium=organic' — disallowed by robots.txt
+22:39:52  WARNING  src.scraper.runner — hit 116018b0-3544-4602-b5f3-a5a6121ba431: homepage fetch failed for 'http://www.studiosmilesnyc.com/' — disallowed by robots.txt
+22:39:52  WARNING  src.scraper.runner — hit 1eae481e-5501-420d-8893-a1e39599a6c6: homepage fetch failed for 'https://wallstdentalspanyc.com/' — disallowed by robots.txt
+22:40:14  WARNING  src.scraper.runner — hit 9f9c6efe-cb5f-4741-9c6e-28463622eddd: homepage fetch failed for 'https://www.preferreddentalcare.com/locations/chelsea-ny-location' — disallowed by robots.txt
+22:40:14  WARNING  src.scraper.runner — hit d6b4e609-f075-4e9b-a249-1d01a5deeddf: homepage fetch failed for 'https://maidenlanedental.com/' — disallowed by robots.txt
+22:40:14  WARNING  src.scraper.runner — hit 57e70629-7fe8-48ff-a1be-937ce2ad4a6c: homepage fetch failed for 'https://www.esthetixdentalspa.com/' — disallowed by robots.txt
+22:40:23  WARNING  src.scraper.runner — hit 7f7c4f45-3302-40dd-912b-c4527acfd02f: homepage fetch failed for 'https://tribecanydentistoffice.com/' — disallowed by robots.txt
+22:40:32  WARNING  src.scraper.runner — hit afd5f21c-98a9-43d3-bcb8-298005ca0dd0: homepage fetch failed for 'https://manhattandentalspa.com/?utm_source=gmb&utm_medium=organic' — disallowed by robots.txt
+22:40:45  WARNING  src.scraper.runner — hit 0e1bc2f0-a603-47d1-b6e7-94ff228363ab: homepage fetch failed for 'https://www.nycsmilespa.com/' — disallowed by robots.txt
+22:40:49  ERROR    trafilatura.utils — parsed tree length: 0, wrong data type or not valid HTML
+22:40:49  ERROR    trafilatura.core — empty HTML tree: None
+22:40:49  WARNING  trafilatura.core — discarding data: None
+22:41:01  WARNING  src.scraper.runner — hit 7afc22eb-d1fb-455d-a327-b3a5082da317: homepage fetch failed for 'https://www.lesbellesnyc.com/' — disallowed by robots.txt
+22:41:02  WARNING  src.scraper.runner — hit 758986a9-a963-485b-b39a-0e80265ec824: homepage fetch failed for 'https://172nycdental.com/?utm_source=google&utm_medium=organic&utm_campaign=gmb' — disallowed by robots.txt
+22:41:02  WARNING  src.scraper.runner — hit 5b18b194-6a63-4473-8dd8-b804b02aad59: homepage fetch failed for 'https://advanceddentalartsnyc.com/' — disallowed by robots.txt
+22:41:02  WARNING  src.scraper.runner — hit 87d567ed-073d-4d4c-be2d-304c81a3f4f7: homepage fetch failed for 'https://villagedentalnyc.com/' — disallowed by robots.txt
+22:41:02  WARNING  src.scraper.runner — hit d994e4f4-6f23-4f2a-ab3d-2445044b9ec4: homepage fetch failed for 'https://cpwdentistry.com/' — disallowed by robots.txt
+22:41:24  WARNING  src.scraper.runner — hit 669dabed-961a-4bc7-ba4a-733559f8d937: homepage fetch failed for 'https://www.instyledentalcare.com/' — disallowed by robots.txt
+
+▶  EXTRACT
+────────────────────────────────────────────────────────────
+
+▶  VERIFY
+────────────────────────────────────────────────────────────
+
+▶  SCORE
+────────────────────────────────────────────────────────────

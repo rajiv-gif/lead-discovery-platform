@@ -21,7 +21,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 STAGE_ERROR_HINTS: dict[str, str] = {
     "discover": (
         "Check GOOGLE_PLACES_API_KEY is set and the query returned results. "
-        "Try narrowing the specialty or city."
+        "Try narrowing the niche or city."
     ),
     "scrape": (
         "Check network connectivity and SCRAPER_RATE_LIMIT_DELAY. "

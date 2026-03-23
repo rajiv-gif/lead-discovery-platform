@@ -60,6 +60,20 @@ class Settings:
         # --- Export ---
         self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
 
+        # --- Dashboard auth ---
+        # Set all three to enable the login page. If username/password are unset,
+        # the login page is shown but any credentials are accepted (dev mode only).
+        # SESSION_SECRET_KEY signs the session cookie — set a long random string in prod.
+        self.dashboard_username: str | None = os.getenv("DASHBOARD_USERNAME")
+        self.dashboard_password: str | None = os.getenv("DASHBOARD_PASSWORD")
+        self.session_secret_key: str = os.getenv(
+            "SESSION_SECRET_KEY", "change-me-in-production-use-a-long-random-string"
+        )
+
+        # --- Dashboard server ---
+        self.dashboard_host: str = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+        self.dashboard_port: int = int(os.getenv("DASHBOARD_PORT", "8000"))
+
     @staticmethod
     def _require(key: str) -> str:
         value = os.getenv(key)

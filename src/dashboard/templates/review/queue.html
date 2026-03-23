@@ -2,116 +2,183 @@
 {% block title %}Review — {{ campaign.name }} — Lead Discovery{% endblock %}
 
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem">
-  <h2>Review queue</h2>
-  <span>{{ lead_data | length }} leads</span>
+<a href="/campaigns/{{ campaign.id }}" class="page-back">← {{ campaign.name }}</a>
+
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap">
+  <div>
+    <h1>Review Queue</h1>
+    <p class="muted" style="font-size:.88rem; margin-top:.3rem">
+      {{ lead_data | length }} lead{{ 's' if lead_data|length != 1 else '' }} · score ≥ {{ min_score }}
+    </p>
+  </div>
+  <div style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
+    {% if lead_data %}
+    <button class="btn btn-green btn-sm"
+      hx-post="/campaigns/{{ campaign.id }}/review/bulk/approve-all?min_score={{ min_score }}"
+      hx-confirm="Approve all {{ lead_data | length }} visible lead{{ 's' if lead_data|length != 1 else '' }}?"
+      title="Approve all visible leads">
+      ✓ Approve all
+    </button>
+    {% set cold_count = lead_data | selectattr('lead.score_band.value', 'equalto', 'cold') | list | length %}
+    {% if cold_count > 0 %}
+    <button class="btn btn-red btn-sm"
+      hx-post="/campaigns/{{ campaign.id }}/review/bulk/reject-cold?min_score={{ min_score }}"
+      hx-confirm="Reject {{ cold_count }} cold lead{{ 's' if cold_count != 1 else '' }} (score < 50)?"
+      title="Reject all cold-band leads">
+      ✗ Reject cold ({{ cold_count }})
+    </button>
+    {% endif %}
+    {% endif %}
+    <form method="get" action="/campaigns/{{ campaign.id }}/review"
+          style="display:flex; gap:.5rem; align-items:flex-end">
+      <div>
+        <label class="form-label" for="min_score" style="margin-bottom:.3rem">Min score</label>
+        <input class="form-input" type="number" id="min_score" name="min_score"
+               value="{{ min_score }}" min="0" max="115" step="1"
+               style="width:5.5rem">
+      </div>
+      <button type="submit" class="btn btn-ghost btn-sm" style="margin-bottom:1px">Filter</button>
+    </form>
+  </div>
 </div>
 
-<p style="color:var(--pico-muted-color); margin-bottom:1rem">
-  {{ campaign.name }} · Showing leads with score ≥ {{ min_score }}
-</p>
-
-<!-- Min-score filter -->
-<form method="get" action="/campaigns/{{ campaign.id }}/review"
-      style="display:flex; gap:.5rem; align-items:flex-end; margin-bottom:1.5rem">
-  <div>
-    <label for="min_score" style="margin-bottom:.25rem">Min score</label>
-    <input type="number" id="min_score" name="min_score"
-           value="{{ min_score }}" min="0" max="100" step="1"
-           style="width:6rem; margin:0">
-  </div>
-  <button type="submit" class="secondary" style="margin:0">Filter</button>
-</form>
-
 {% if not lead_data %}
-<p>No pending leads above score {{ min_score }}. Either all leads have been reviewed
-   or the score threshold is too high.</p>
+<div class="card" style="text-align:center; padding:3rem">
+  <p class="muted">No pending leads above score {{ min_score }}.</p>
+</div>
 {% endif %}
 
+<div style="display:flex; flex-direction:column; gap:1rem">
 {% for ld in lead_data %}
-<article id="lead-{{ ld.lead.id }}" class="lead-card">
-  <header style="display:flex; justify-content:space-between; align-items:flex-start">
-    <div>
-      <strong>{{ ld.company.name }}</strong>
-      {% if ld.company.city %}<small> · {{ ld.company.city }}</small>{% endif %}
-    </div>
-    <div style="text-align:right">
-      <span class="badge badge-{{ ld.lead.score_band.value if ld.lead.score_band else 'cold' }}">
-        {{ ld.lead.score_band.value if ld.lead.score_band else '—' }}
-      </span>
-      <br>
-      <small>Score: {{ "%.1f"|format(ld.lead.score) if ld.lead.score else '—' }}</small>
-    </div>
-  </header>
+{% set score_val = ld.lead.score or 0 %}
+{% set band = ld.lead.score_band.value if ld.lead.score_band else 'cold' %}
+{% set score_color = 'var(--hot)' if band == 'hot' else ('var(--warm)' if band == 'warm' else ('var(--cold)' if band == 'cold' else 'var(--dq)')) %}
+{% set score_pct = [(score_val / 115 * 100), 100] | min %}
 
-  {% if ld.contacts %}
-  <ul style="margin:.5rem 0; padding-left:1.2rem">
-    {% for contact in ld.contacts %}
-    <li>
-      {{ contact.full_name or ((contact.first_name or '') + ' ' + (contact.last_name or '')) | trim or '—' }}
-      {% if contact.title %}<em>({{ contact.title }})</em>{% endif %}
-      {% if ld.contact_emails.get(contact.id) %}
-      — <a href="mailto:{{ ld.contact_emails[contact.id].address }}">
-          {{ ld.contact_emails[contact.id].address }}</a>
-        <small>[{{ ld.contact_emails[contact.id].status.value }}]</small>
+<article id="lead-{{ ld.lead.id }}" class="card lead-card">
+  <div style="display:flex; gap:1.25rem; align-items:flex-start">
+
+    <!-- Score panel -->
+    <div style="text-align:center; min-width:54px">
+      <div class="score-num" style="color:{{ score_color }}">{{ "%.0f"|format(score_val) }}</div>
+      <div class="score-bar-track" style="width:54px">
+        <div class="score-bar-fill" style="width:{{ score_pct }}%; background:{{ score_color }}"></div>
+      </div>
+      <span class="badge badge-{{ band }}" style="margin-top:.4rem; display:inline-block">{{ band }}</span>
+    </div>
+
+    <!-- Main content -->
+    <div style="flex:1; min-width:0">
+      <div style="display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; margin-bottom:.5rem">
+        <span style="font-family:var(--font-head); font-weight:700; font-size:1rem">{{ ld.company.name }}</span>
+        {% if ld.company.city %}
+        <span class="muted" style="font-size:.82rem">{{ ld.company.city }}{% if ld.company.state %}, {{ ld.company.state }}{% endif %}</span>
+        {% endif %}
+      </div>
+
+      {% if ld.contacts %}
+      <div style="margin-bottom:.5rem; display:flex; flex-direction:column; gap:.2rem">
+        {% for contact in ld.contacts %}
+        <div style="font-size:.85rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap">
+          <span style="color:var(--text)">
+            {{ contact.full_name or ((contact.first_name or '') + ' ' + (contact.last_name or '')) | trim or '—' }}
+          </span>
+          {% if contact.title %}
+          <span class="muted" style="font-size:.78rem">{{ contact.title }}</span>
+          {% endif %}
+          {% if ld.contact_emails.get(contact.id) %}
+          <a href="mailto:{{ ld.contact_emails[contact.id].address }}" style="font-size:.82rem; font-family:var(--font-mono)">
+            {{ ld.contact_emails[contact.id].address }}
+          </a>
+          <span class="badge badge-{{ ld.contact_emails[contact.id].status.value }}" style="font-size:.65rem">
+            {{ ld.contact_emails[contact.id].status.value }}
+          </span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
       {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
 
-  {% if ld.company_emails %}
-  <p style="margin:.25rem 0; font-size:.9em; color:var(--pico-muted-color)">
-    📧
-    {% for e in ld.company_emails %}
-    {{ e.address }}{% if not loop.last %}, {% endif %}
-    {% endfor %}
-  </p>
-  {% endif %}
+      <div style="display:flex; gap:1.25rem; flex-wrap:wrap; font-size:.82rem">
+        {% if ld.company_emails %}
+        <div style="display:flex; align-items:center; gap:.35rem; color:var(--text-2)">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x=".5" y="2.5" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M1 3.5l5.5 4 5.5-4" stroke="currentColor" stroke-width="1.1"/></svg>
+          {% for e in ld.company_emails %}{{ e.address }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if ld.company_phones %}
+        <div style="display:flex; align-items:center; gap:.35rem; color:var(--text-2)">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 1.5h3l1 3-1.5 1a7 7 0 003 3l1-1.5 3 1v3a1 1 0 01-1 1C5 12.5.5 8 .5 2.5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>
+          {% for p in ld.company_phones %}{{ p.number }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if ld.company.website %}
+        <a href="{{ ld.company.website }}" target="_blank" rel="noopener" style="color:var(--text-2); font-family:var(--font-mono); font-size:.78rem">
+          {{ ld.company.website | truncate(45, true, '…') }}
+        </a>
+        {% endif %}
+        {% if ld.company.extra_fields and ld.company.extra_fields.get('platform') == 'shopify' %}
+        <span style="display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:600; color:#96bf48; background:rgba(150,191,72,.1); border:1px solid rgba(150,191,72,.25); border-radius:4px; padding:.15rem .45rem">
+          <span>⬡</span> Shopify
+          {% if ld.company.extra_fields.get('shopify_product_count') %}
+          · {{ ld.company.extra_fields['shopify_product_count'] }} products
+          {% endif %}
+          {% if ld.company.extra_fields.get('shopify_price_min') is not none and ld.company.extra_fields.get('shopify_price_max') is not none %}
+          · ${{ "%.0f"|format(ld.company.extra_fields['shopify_price_min']) }}–${{ "%.0f"|format(ld.company.extra_fields['shopify_price_max']) }}
+          {% endif %}
+        </span>
+        {% endif %}
+      </div>
 
-  {% if ld.company_phones %}
-  <p style="margin:.25rem 0; font-size:.9em; color:var(--pico-muted-color)">
-    📞
-    {% for p in ld.company_phones %}
-    {{ p.number }}{% if not loop.last %}, {% endif %}
-    {% endfor %}
-  </p>
-  {% endif %}
+      <!-- AEO signals if present in score_details -->
+      {% if ld.lead.score_details and ld.lead.score_details.get('aeo_signals') %}
+      {% set aeo = ld.lead.score_details['aeo_signals'] %}
+      {% set aeo_score = ld.lead.score_details.get('aeo_opportunity', 0) %}
+      {% if aeo_score > 0 %}
+      <div style="margin-top:.6rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap">
+        <span style="font-size:.7rem; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.06em">AEO gaps</span>
+        {% if not aeo.has_json_ld %}
+        <span class="badge" style="background:rgba(251,191,36,.1); color:var(--warm); font-size:.65rem">No schema</span>
+        {% elif not aeo.has_local_business_schema %}
+        <span class="badge" style="background:rgba(251,191,36,.1); color:var(--warm); font-size:.65rem">No LocalBusiness schema</span>
+        {% endif %}
+        {% if not aeo.has_viewport_meta %}
+        <span class="badge" style="background:rgba(251,191,36,.1); color:var(--warm); font-size:.65rem">Not mobile-ready</span>
+        {% endif %}
+        {% if not aeo.has_og_tags %}
+        <span class="badge" style="background:rgba(251,191,36,.1); color:var(--warm); font-size:.65rem">No OG tags</span>
+        {% endif %}
+        {% if not aeo.is_https %}
+        <span class="badge" style="background:rgba(248,113,113,.1); color:var(--red); font-size:.65rem">HTTP only</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endif %}
 
-  {% if ld.company.website %}
-  <p style="margin:.25rem 0; font-size:.85em">
-    <a href="{{ ld.company.website }}" target="_blank" rel="noopener">{{ ld.company.website }}</a>
-  </p>
-  {% endif %}
+    </div>
+  </div>
 
-  <footer style="display:flex; gap:.5rem; margin-top:.75rem">
-    <button
+  <div style="display:flex; gap:.6rem; margin-top:1rem; padding-top:.85rem; border-top:1px solid var(--border)">
+    <button class="btn btn-green btn-sm"
       hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/approve"
       hx-target="closest article"
-      hx-swap="outerHTML"
-      style="background:var(--pico-ins-color,#4ade80); border-color:transparent; color:#fff">
+      hx-swap="outerHTML">
       ✓ Approve
     </button>
-    <button
+    <button class="btn btn-red btn-sm"
       hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/reject"
       hx-target="closest article"
-      hx-swap="outerHTML"
-      class="secondary"
-      style="background:var(--pico-del-color,#f87171); border-color:transparent; color:#fff">
+      hx-swap="outerHTML">
       ✗ Reject
     </button>
-    <button
+    <button class="btn btn-amber btn-sm"
       hx-post="/campaigns/{{ campaign.id }}/review/{{ ld.lead.id }}/needs-edit"
       hx-target="closest article"
-      hx-swap="outerHTML"
-      class="secondary">
+      hx-swap="outerHTML">
       ✎ Needs edit
     </button>
-  </footer>
+  </div>
 </article>
 {% endfor %}
-
-<p style="margin-top:2rem">
-  <a href="/campaigns/{{ campaign.id }}">← Back to campaign</a>
-</p>
+</div>
 {% endblock %}

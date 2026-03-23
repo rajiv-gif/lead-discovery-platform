@@ -40,7 +40,7 @@ class AuditLog(UUIDPrimaryKey, Base):
     # PK of the row that changed
     record_id: Mapped[uuid.UUID] = mapped_column(SAUUID(as_uuid=True), nullable=False)
     action: Mapped[AuditAction] = mapped_column(
-        SAEnum(AuditAction, name="auditaction"),
+        SAEnum(AuditAction, name="auditaction", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     # Who or what made the change ("cli", "pipeline", a username, etc.)
