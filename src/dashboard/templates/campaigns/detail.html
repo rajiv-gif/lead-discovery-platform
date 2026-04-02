@@ -14,10 +14,17 @@
     <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap">
       <span class="mono muted" style="font-size:.82rem">{{ campaign.niche }}</span>
       <span class="muted" style="font-size:.82rem">·</span>
-      <span class="muted" style="font-size:.82rem">{{ campaign.geo_method.value }}{% if campaign.geo_city %} · {{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}{% endif %}</span>
+      <span class="muted" style="font-size:.82rem">
+        {% if campaign.discovery_source.value == 'web_search' %}
+          web search{% if campaign.ecommerce_platform %} · {{ campaign.ecommerce_platform }}{% endif %}
+        {% else %}
+          {{ campaign.geo_method.value if campaign.geo_method else '' }}{% if campaign.geo_city %} · {{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}{% endif %}
+        {% endif %}
+      </span>
     </div>
   </div>
   <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+    <a href="/campaigns/{{ campaign.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
     {% if counts.total_leads > 0 %}
     <a href="/campaigns/{{ campaign.id }}/review" class="btn btn-secondary btn-sm">
       Review
@@ -52,6 +59,74 @@
     <div class="muted" style="font-size:.72rem; margin-top:.2rem; text-transform:uppercase; letter-spacing:.05em">{{ label }}</div>
   </div>
   {% endfor %}
+</div>
+
+<!-- Campaign settings -->
+<div class="card" style="margin-bottom:1rem">
+  <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:.75rem">Campaign settings</div>
+  <div style="display:grid; gap:.45rem; font-size:.85rem">
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Niche</span>
+      <span class="mono">{{ campaign.niche }}</span>
+    </div>
+    {% if campaign.description %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Description</span>
+      <span>{{ campaign.description }}</span>
+    </div>
+    {% endif %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Source</span>
+      <span>{{ campaign.discovery_source.value.replace('_', ' ').title() }}</span>
+    </div>
+    {% if campaign.discovery_source.value == 'web_search' %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Platform</span>
+      <span>{{ campaign.ecommerce_platform or 'any' }}</span>
+    </div>
+    <div style="display:flex; gap:.75rem; align-items:flex-start">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Queries</span>
+      <span class="mono" style="white-space:pre-line; font-size:.8rem; line-height:1.6">{{ (campaign.search_queries or []) | join('\n') }}</span>
+    </div>
+    {% else %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Geo method</span>
+      <span>{{ campaign.geo_method.value.replace('_', ' ').title() if campaign.geo_method else '—' }}</span>
+    </div>
+    {% if campaign.geo_city %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Location</span>
+      <span>{{ campaign.geo_city }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}</span>
+    </div>
+    {% elif campaign.geo_state %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">State</span>
+      <span>{{ campaign.geo_state }}{% if campaign.geo_country %}, {{ campaign.geo_country }}{% endif %}</span>
+    </div>
+    {% if campaign.geo_cities_selected %}
+    <div style="display:flex; gap:.75rem; align-items:flex-start">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Cities</span>
+      <span style="font-size:.83rem">{{ campaign.geo_cities_selected | join(', ') }}</span>
+    </div>
+    {% endif %}
+    {% elif campaign.geo_postal_code %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Postal code</span>
+      <span>{{ campaign.geo_postal_code }}</span>
+    </div>
+    {% elif campaign.geo_sw_lat is not none %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Bounding box</span>
+      <span class="mono" style="font-size:.8rem">{{ campaign.geo_sw_lat }},{{ campaign.geo_sw_lng }} → {{ campaign.geo_ne_lat }},{{ campaign.geo_ne_lng }}</span>
+    </div>
+    {% elif campaign.geo_center_lat is not none %}
+    <div style="display:flex; gap:.75rem">
+      <span class="muted" style="min-width:110px; flex-shrink:0">Centre</span>
+      <span class="mono" style="font-size:.8rem">{{ campaign.geo_center_lat }},{{ campaign.geo_center_lng }} · {{ campaign.geo_radius_m }}m</span>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
 </div>
 
 <!-- Stage pipeline (HTMX swap target) -->

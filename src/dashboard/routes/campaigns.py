@@ -1,5 +1,7 @@
-"""Campaign list and create routes."""
+"""Campaign list, create, and edit routes."""
 from __future__ import annotations
+
+import uuid
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -172,5 +174,97 @@ async def campaign_create(request: Request):
         session.add(campaign)
         session.flush()
         campaign_id = str(campaign.id)
+
+    return RedirectResponse(f"/campaigns/{campaign_id}", status_code=303)
+
+
+@router.get("/campaigns/{campaign_id}/edit", response_class=HTMLResponse)
+async def campaign_edit_form(request: Request, campaign_id: uuid.UUID) -> HTMLResponse:
+    with get_session() as session:
+        campaign = session.get(Campaign, campaign_id)
+        if campaign is None:
+            return HTMLResponse("Campaign not found", status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "campaigns/edit.html",
+        {
+            "campaign": campaign,
+            "campaign_id": campaign_id,
+            "us_states": get_states("United States"),
+            "countries": get_countries(),
+            "error": None,
+        },
+    )
+
+
+@router.post("/campaigns/{campaign_id}/edit")
+async def campaign_edit(request: Request, campaign_id: uuid.UUID):
+    form = await request.form()
+
+    def _err(msg: str, campaign: Campaign) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "campaigns/edit.html",
+            {
+                "campaign": campaign,
+                "campaign_id": campaign_id,
+                "us_states": get_states("United States"),
+                "countries": get_countries(),
+                "error": msg,
+                "form": dict(form),
+            },
+            status_code=422,
+        )
+
+    with get_session() as session:
+        campaign = session.get(Campaign, campaign_id)
+        if campaign is None:
+            return HTMLResponse("Campaign not found", status_code=404)
+
+        name = (form.get("name") or "").strip()
+        if not name:
+            return _err("Campaign name is required.", campaign)
+
+        campaign.name = name
+        campaign.description = (form.get("description") or "").strip() or None
+        campaign.niche = (form.get("niche") or "dentists").strip()
+
+        if campaign.discovery_source == DiscoverySource.WEB_SEARCH:
+            raw_queries = (form.get("search_queries") or "").strip()
+            search_queries = [q.strip() for q in raw_queries.splitlines() if q.strip()]
+            if not search_queries:
+                return _err("At least one search query is required.", campaign)
+            campaign.search_queries = search_queries
+            ecommerce_platform = (form.get("ecommerce_platform") or "any").strip() or None
+            campaign.ecommerce_platform = ecommerce_platform if ecommerce_platform != "any" else None
+        else:
+            # GOOGLE_PLACES: update geo fields
+            geo_method_raw = (form.get("geo_method") or "").strip()
+            try:
+                campaign.geo_method = GeoMethod(geo_method_raw)
+            except ValueError:
+                return _err(f"Invalid geo method: {geo_method_raw!r}", campaign)
+
+            def _float(key: str):
+                val = form.get(key, "").strip()
+                return float(val) if val else None
+
+            def _int(key: str):
+                val = form.get(key, "").strip()
+                return int(val) if val else None
+
+            campaign.geo_city = (form.get("city") or "").strip() or None
+            campaign.geo_country = (form.get("country") or "").strip() or None
+            campaign.geo_postal_code = (form.get("postal_code") or "").strip() or None
+            campaign.geo_state = (form.get("geo_state") or "").strip() or None
+            campaign.geo_cities_selected = form.getlist("geo_cities_selected") or None
+            campaign.geo_sw_lat = _float("sw_lat")
+            campaign.geo_sw_lng = _float("sw_lng")
+            campaign.geo_ne_lat = _float("ne_lat")
+            campaign.geo_ne_lng = _float("ne_lng")
+            campaign.geo_center_lat = _float("center_lat")
+            campaign.geo_center_lng = _float("center_lng")
+            campaign.geo_radius_m = _int("radius_m")
 
     return RedirectResponse(f"/campaigns/{campaign_id}", status_code=303)

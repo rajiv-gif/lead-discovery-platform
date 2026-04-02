@@ -8,12 +8,15 @@ from fastapi.responses import HTMLResponse
 
 from fastapi.responses import RedirectResponse
 
+from sqlalchemy import select
+
 from src.dashboard.deps import STAGE_ERROR_HINTS, get_stage_counts, templates
 from src.dashboard.persistence import get_last_run
 from src.dashboard.tasks import registry
 from src.db.session import get_session
 from src.models.campaign import Campaign
 from src.models.company_lead import CompanyLead
+from src.models.company_page import CompanyPage
 from src.models.discovery_hit import DiscoveryHit
 from src.models.pipeline_run import PipelineRun
 
@@ -71,6 +74,14 @@ def _build_stage_rows(counts: dict) -> list[dict]:
 @router.post("/campaigns/{campaign_id}/delete")
 async def campaign_delete(campaign_id: uuid.UUID):
     with get_session() as session:
+        # CompanyPage has a FK → discovery_hits.id, so it must be deleted first.
+        hit_ids = session.scalars(
+            select(DiscoveryHit.id).where(DiscoveryHit.campaign_id == campaign_id)
+        ).all()
+        if hit_ids:
+            session.query(CompanyPage).filter(
+                CompanyPage.discovery_hit_id.in_(hit_ids)
+            ).delete(synchronize_session=False)
         session.query(PipelineRun).filter_by(campaign_id=campaign_id).delete()
         session.query(CompanyLead).filter_by(campaign_id=campaign_id).delete()
         session.query(DiscoveryHit).filter_by(campaign_id=campaign_id).delete()
