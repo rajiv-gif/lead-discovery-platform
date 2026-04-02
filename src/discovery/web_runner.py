@@ -32,7 +32,7 @@ from src.models.campaign import Campaign
 log = logging.getLogger(__name__)
 
 _DDG_RATE_LIMIT = 2.0   # seconds between DDG requests
-_MAX_RESULTS = 10        # organic results per query
+_MAX_RESULTS = 30        # organic results per query (fetches up to 3 DDG pages)
 _HOMEPAGE_TIMEOUT = 10.0 # seconds to fetch homepage for Shopify detection
 
 

@@ -26,6 +26,25 @@ from urllib.parse import urljoin, urlparse
 from src.models.enums import PageType
 from src.scraper.classifier import classify_url
 
+# Well-known paths used by Shopify, WooCommerce and other ecommerce platforms.
+# Probed as fallbacks when no CONTACT or ABOUT page is found via link-following.
+_ECOMMERCE_FALLBACK_PATHS: dict[PageType, list[str]] = {
+    PageType.CONTACT: [
+        "/pages/contact",
+        "/pages/contact-us",
+        "/contact",
+        "/contact-us",
+        "/pages/get-in-touch",
+    ],
+    PageType.ABOUT: [
+        "/pages/about",
+        "/pages/about-us",
+        "/about",
+        "/about-us",
+        "/pages/our-story",
+    ],
+}
+
 log = logging.getLogger(__name__)
 
 # Types to look for, in priority order.
@@ -126,6 +145,23 @@ def find_supplemental_urls(
         best = min(candidates, key=lambda u: len(urlparse(u).path))
         result[page_type] = best
         used_urls.add(best)
+
+    # For any target type still missing, probe well-known ecommerce paths.
+    # The scraper handles 404s gracefully so probing non-existent paths is safe.
+    parsed_base = urlparse(homepage_url)
+    origin = f"{parsed_base.scheme}://{parsed_base.netloc}"
+    for page_type, paths in _ECOMMERCE_FALLBACK_PATHS.items():
+        if page_type not in result:
+            for path in paths:
+                candidate = origin + path
+                if candidate not in used_urls:
+                    result[page_type] = candidate
+                    used_urls.add(candidate)
+                    log.debug(
+                        "page_finder using ecommerce fallback path %r for %s on %r",
+                        path, page_type.value, homepage_url,
+                    )
+                    break
 
     log.debug(
         "page_finder selected %d supplemental pages for %r: %s",

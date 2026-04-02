@@ -26,6 +26,7 @@ def compute_score(
     website_reachable: bool,
     is_suppressed: bool,
     aeo_signals: AeoSignals | None = None,
+    require_contact: bool = True,
 ) -> ScoringResult:
     """Compute a quality score for a company/lead.
 
@@ -34,8 +35,11 @@ def compute_score(
 
     Hard disqualifications (score=0, band=DISQUALIFIED):
     1. company.name is None or empty
-    2. No emails AND no phones
+    2. No emails AND no phones  (skipped when require_contact=False, e.g. web-search campaigns)
     3. is_suppressed is True
+
+    ``require_contact=False`` is used for WEB_SEARCH campaigns where DTC/ecommerce
+    brands commonly use contact forms rather than exposing email or phone publicly.
 
     Returns a :class:`ScoringResult` with per-dimension breakdown.
     """
@@ -49,7 +53,7 @@ def compute_score(
             disqualification_reason="company name is missing",
         )
 
-    if not emails and not phones:
+    if require_contact and not emails and not phones:
         return ScoringResult(
             score=0.0,
             score_band=ScoreBand.DISQUALIFIED,

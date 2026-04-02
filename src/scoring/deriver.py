@@ -90,6 +90,7 @@ def derive_company_lead(
     pages: list,
     campaign_id: uuid.UUID,
     website_reachable: bool,
+    require_contact: bool = True,
 ) -> CompanyLead:
     """Create or update the :class:`CompanyLead` for *company*.
 
@@ -109,6 +110,7 @@ def derive_company_lead(
         website_reachable=website_reachable,
         is_suppressed=is_suppressed,
         aeo_signals=aeo_signals,
+        require_contact=require_contact,
     )
 
     existing: CompanyLead | None = (

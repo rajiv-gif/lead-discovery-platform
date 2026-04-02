@@ -15,7 +15,7 @@ from src.models.company_page import CompanyPage
 from src.models.contact import Contact
 from src.models.discovery_hit import DiscoveryHit
 from src.models.email import Email
-from src.models.enums import DiscoveryHitStatus, LeadStatus, ScoreBand
+from src.models.enums import DiscoveryHitStatus, DiscoverySource, LeadStatus, ScoreBand
 from src.models.phone import Phone
 from src.scoring.deriver import derive_company_lead
 
@@ -70,6 +70,10 @@ def run_scoring_for_campaign(
 
         company_ids = list(set(cid for cid in hit_rows if cid is not None))
 
+        # Web-search campaigns: don't disqualify stores that lack email/phone —
+        # DTC/ecommerce brands often use contact forms instead of publishing them.
+        require_contact = campaign.discovery_source != DiscoverySource.WEB_SEARCH
+
         for company_id in company_ids:
             try:
                 company = session.get(Company, company_id)
@@ -112,6 +116,7 @@ def run_scoring_for_campaign(
                     pages=list(pages),
                     campaign_id=campaign_id,
                     website_reachable=website_reachable,
+                    require_contact=require_contact,
                 )
 
                 session.flush()  # Assign ID if new
