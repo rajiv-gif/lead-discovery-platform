@@ -5,7 +5,10 @@ in ``campaign.search_queries``.  Each query returns up to 10 organic results;
 companies are deduplicated by domain across all queries in the run.
 
 Shopify platform mode (campaign.ecommerce_platform == "shopify"):
-  - Auto-prepends "site:myshopify.com" to all queries for precise targeting
+  - Appends '"cdn.shopify.com"' to all queries so search engines surface stores
+    on custom domains (paid plans) as well as free *.myshopify.com stores
+  - HTML fingerprint check (detect_shopify) filters out false positives before
+    any enrichment is attempted
   - Fetches /products.json after discovery to enrich company.extra_fields with
     product count and price range (used in scoring + dashboard display)
 
@@ -21,7 +24,7 @@ import httpx
 
 from src.db.session import get_session
 from src.discovery.runner import DiscoverySummary
-from src.discovery.shopify import enrich_company_extra_fields, fetch_shopify_info, extract_myshopify_url
+from src.discovery.shopify import detect_shopify, enrich_company_extra_fields, fetch_shopify_info, extract_myshopify_url
 from src.discovery.upsert import create_web_search_hit, upsert_company_from_web_search
 from src.discovery.web_search import DuckDuckGoClient, WebSearchError
 from src.models.campaign import Campaign
@@ -58,9 +61,10 @@ def run_web_discovery_for_campaign(
             "for WEB_SEARCH discovery."
         )
 
-    # For Shopify mode, prepend site:myshopify.com to every query
+    # For Shopify mode, append the CDN signal so search engines surface stores
+    # on custom domains (paid plans) as well as free *.myshopify.com stores.
     queries = (
-        [f"site:myshopify.com {q}" for q in raw_queries]
+        [f'{q} "cdn.shopify.com"' for q in raw_queries]
         if is_shopify else raw_queries
     )
 
@@ -151,7 +155,11 @@ def run_web_discovery_for_campaign(
 
 
 def _enrich_shopify(url: str, domain: str) -> dict:
-    """Fetch homepage and products.json, return Shopify enrichment dict."""
+    """Fetch homepage and products.json, return Shopify enrichment dict.
+
+    Returns an empty dict if the page doesn't pass the Shopify HTML fingerprint
+    check — this filters out false positives from open-web search results.
+    """
     extra: dict = {}
     try:
         resp = httpx.get(
@@ -161,6 +169,11 @@ def _enrich_shopify(url: str, domain: str) -> dict:
             headers={"User-Agent": "LeadDiscoveryBot/1.0"},
         )
         html = resp.text
+
+        if not detect_shopify(html):
+            log.debug("Shopify fingerprint not found for %r — skipping", domain)
+            return {}
+
         myshopify_url = extract_myshopify_url(html, url)
         info = fetch_shopify_info(domain, myshopify_url)
 
@@ -183,6 +196,6 @@ def _enrich_shopify(url: str, domain: str) -> dict:
         )
     except Exception as exc:
         log.debug("Shopify enrichment failed for %r: %s", domain, exc)
-        extra["platform"] = "shopify"  # still mark as shopify even if enrichment fails
+        # Don't mark as shopify if we couldn't fetch the page — can't confirm.
 
     return extra
