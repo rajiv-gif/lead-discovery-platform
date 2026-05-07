@@ -1,15 +1,18 @@
 """Web-search discovery runner for ecommerce campaigns.
 
-Uses DuckDuckGo to find company websites from free-text search queries stored
-in ``campaign.search_queries``.  Each query returns up to 10 organic results;
-companies are deduplicated by domain across all queries in the run.
+Uses DuckDuckGo (free) or Serper.dev (paid, Google-backed) to find company
+websites from free-text search queries stored in ``campaign.search_queries``.
+
+Serper is used automatically when SERPER_API_KEY is set — it returns up to
+100 results per query vs DDG's ~10, and uses Google's index for much better
+coverage of actual company websites.
 
 Shopify platform mode (campaign.ecommerce_platform == "shopify"):
   - Appends '"cdn.shopify.com"' to all queries so search engines surface stores
     on custom domains (paid plans) as well as free *.myshopify.com stores
   - HTML fingerprint check (detect_shopify) filters out false positives before
     any enrichment is attempted
-  - Fetches /products.json after discovery to enrich company.extra_fields with
+  - Fetches /products.json after detection to enrich company.extra_fields with
     product count and price range (used in scoring + dashboard display)
 
 The rest of the pipeline (scraper → extraction → scoring) is identical to the
@@ -22,25 +25,27 @@ import uuid
 
 import httpx
 
+from src.config.settings import Settings
 from src.db.session import get_session
 from src.discovery.runner import DiscoverySummary
 from src.discovery.shopify import detect_shopify, enrich_company_extra_fields, fetch_shopify_info, extract_myshopify_url
 from src.discovery.upsert import create_web_search_hit, upsert_company_from_web_search
-from src.discovery.web_search import DuckDuckGoClient, WebSearchError
+from src.discovery.web_search import DuckDuckGoClient, SerperClient, WebSearchError
 from src.models.campaign import Campaign
 
 log = logging.getLogger(__name__)
 
-_DDG_RATE_LIMIT = 2.0   # seconds between DDG requests
-_MAX_RESULTS = 30        # organic results per query (fetches up to 3 DDG pages)
-_HOMEPAGE_TIMEOUT = 10.0 # seconds to fetch homepage for Shopify detection
+_DDG_RATE_LIMIT = 2.0    # seconds between DDG requests (not needed for Serper)
+_MAX_RESULTS_DDG = 10    # DDG practical limit per query
+_MAX_RESULTS_SERPER = 100 # Serper limit per query
+_HOMEPAGE_TIMEOUT = 10.0  # seconds to fetch homepage for Shopify detection
 
 
 def run_web_discovery_for_campaign(
     campaign_id: uuid.UUID,
     campaign: Campaign,
 ) -> DiscoverySummary:
-    """Run DuckDuckGo web-search discovery for *campaign*.
+    """Run web-search discovery for *campaign*.
 
     Args:
         campaign_id: UUID of the campaign.
@@ -68,6 +73,16 @@ def run_web_discovery_for_campaign(
         if is_shopify else raw_queries
     )
 
+    settings = Settings()
+    if settings.serper_api_key:
+        client = SerperClient(api_key=settings.serper_api_key)
+        max_results = _MAX_RESULTS_SERPER
+        log.info("Using Serper.dev for web search (%d results/query)", max_results)
+    else:
+        client = DuckDuckGoClient(rate_limit_delay=_DDG_RATE_LIMIT)
+        max_results = _MAX_RESULTS_DDG
+        log.info("Using DuckDuckGo for web search (%d results/query)", max_results)
+
     log.info(
         "Starting web-search discovery for campaign id=%s name=%r (%d queries, platform=%s)",
         campaign_id,
@@ -76,7 +91,6 @@ def run_web_discovery_for_campaign(
         campaign.ecommerce_platform or "any",
     )
 
-    client = DuckDuckGoClient(rate_limit_delay=_DDG_RATE_LIMIT)
     summary = DiscoverySummary()
     seen_domains: set[str] = set()
 
@@ -85,7 +99,7 @@ def run_web_discovery_for_campaign(
         log.info("Web search query %r", query)
 
         try:
-            results = client.search(query, max_results=_MAX_RESULTS)
+            results = client.search(query, max_results=max_results)
         except WebSearchError as exc:
             summary.errors += 1
             detail = f"Query {query!r}: {exc}"
@@ -105,10 +119,27 @@ def run_web_discovery_for_campaign(
                     continue
                 seen_domains.add(result.domain)
 
-                # For Shopify mode: verify + enrich via products.json
+                # For Shopify mode: verify + enrich
+                # .myshopify.com results are guaranteed Shopify — skip homepage fetch.
+                # All other results need homepage detection to filter false positives.
                 extra_fields: dict = {}
                 if is_shopify:
-                    extra_fields = _enrich_shopify(result.url, result.domain)
+                    if result.domain.endswith(".myshopify.com"):
+                        # Already confirmed Shopify — just enrich via products.json
+                        info = fetch_shopify_info(result.domain, f"https://{result.domain}")
+                        extra_fields = {"platform": "shopify", "shopify_myshopify_url": f"https://{result.domain}"}
+                        if info.product_count:
+                            extra_fields["shopify_product_count"] = info.product_count
+                        if info.price_min is not None:
+                            extra_fields["shopify_price_min"] = info.price_min
+                        if info.price_max is not None:
+                            extra_fields["shopify_price_max"] = info.price_max
+                    else:
+                        extra_fields = _enrich_shopify(result.url, result.domain)
+                        if not extra_fields:
+                            summary.hits_skipped += 1
+                            log.debug("Skipping non-Shopify result %r", result.domain)
+                            continue
 
                 company, company_created = upsert_company_from_web_search(
                     session=session,
@@ -160,7 +191,6 @@ def _enrich_shopify(url: str, domain: str) -> dict:
     Returns an empty dict if the page doesn't pass the Shopify HTML fingerprint
     check — this filters out false positives from open-web search results.
     """
-    extra: dict = {}
     try:
         resp = httpx.get(
             url,
@@ -177,7 +207,7 @@ def _enrich_shopify(url: str, domain: str) -> dict:
         myshopify_url = extract_myshopify_url(html, url)
         info = fetch_shopify_info(domain, myshopify_url)
 
-        extra["platform"] = "shopify"
+        extra: dict = {"platform": "shopify"}
         if myshopify_url:
             extra["shopify_myshopify_url"] = myshopify_url
         if info.product_count:
@@ -188,14 +218,14 @@ def _enrich_shopify(url: str, domain: str) -> dict:
             extra["shopify_price_max"] = info.price_max
 
         log.debug(
-            "Shopify enrichment: domain=%r products=%d price=%.0f–%.0f",
+            "Shopify confirmed: domain=%r products=%d price=%.0f–%.0f",
             domain,
             info.product_count,
             info.price_min or 0,
             info.price_max or 0,
         )
-    except Exception as exc:
-        log.debug("Shopify enrichment failed for %r: %s", domain, exc)
-        # Don't mark as shopify if we couldn't fetch the page — can't confirm.
+        return extra
 
-    return extra
+    except Exception as exc:
+        log.debug("Shopify homepage fetch failed for %r: %s", domain, exc)
+        return {}

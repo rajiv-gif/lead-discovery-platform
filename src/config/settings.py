@@ -57,6 +57,24 @@ class Settings:
             os.getenv("EXTRACTION_MAX_TOKENS", "1024")
         )
 
+        # --- Ollama (local LLM, takes priority over Anthropic if set) ---
+        self.ollama_base_url: str | None = os.getenv("OLLAMA_BASE_URL")
+        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+
+        # --- Serper.dev (Google search, takes priority over DuckDuckGo if set) ---
+        self.serper_api_key: str | None = os.getenv("SERPER_API_KEY")
+
+        # --- Hunter.io (personal email discovery, used in enrichment stage) ---
+        self.hunter_api_key: str | None = os.getenv("HUNTER_API_KEY")
+        # Minimum Hunter confidence score (0–100) to store an email. 70 = usable,
+        # 90 = high reliability. Lower values find more emails but with more bounces.
+        self.hunter_min_confidence: int = int(os.getenv("HUNTER_MIN_CONFIDENCE", "70"))
+
+        # --- Scraper behaviour ---
+        # Set to false to ignore robots.txt and fetch all public pages.
+        # robots.txt is advisory, not legally binding for publicly available data.
+        self.respect_robots_txt: bool = os.getenv("RESPECT_ROBOTS_TXT", "true").lower() != "false"
+
         # --- Export ---
         self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
 

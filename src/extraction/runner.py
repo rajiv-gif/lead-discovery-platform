@@ -15,7 +15,7 @@ from src.config.settings import Settings
 from src.db.session import get_session
 from src.extraction.deterministic import extract_from_page
 from src.extraction.linker import link
-from src.extraction.llm import AnthropicClient, LLMClient, call_llm
+from src.extraction.llm import AnthropicClient, OllamaClient, LLMClient, call_llm
 from src.extraction.merge import merge
 from src.extraction.models import ExtractionResult
 from src.extraction.persist import persist_result
@@ -167,11 +167,18 @@ def run_extraction_for_campaign(campaign_id: uuid.UUID) -> ExtractionSummary:
     summary = ExtractionSummary()
 
     llm_client: Optional[LLMClient] = None
-    if settings.anthropic_api_key:
+    if settings.ollama_base_url:
+        llm_client = OllamaClient(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
+        log.info("Using Ollama for LLM extraction: %s / %s", settings.ollama_base_url, settings.ollama_model)
+    elif settings.anthropic_api_key:
         llm_client = AnthropicClient(
             api_key=settings.anthropic_api_key,
             model=settings.extraction_model,
         )
+        log.info("Using Anthropic for LLM extraction: %s", settings.extraction_model)
 
     llm_runs_dir = Path("data/llm_runs")
     llm_runs_dir.mkdir(parents=True, exist_ok=True)

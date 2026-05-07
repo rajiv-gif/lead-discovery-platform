@@ -5,13 +5,14 @@ import uuid
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.dashboard.deps import templates
 from src.db.session import get_session
 from src.discovery.city_lists import get_countries, get_states
 from src.models.campaign import Campaign
-from src.models.enums import CampaignStatus, DiscoverySource, GeoMethod
+from src.models.company_lead import CompanyLead
+from src.models.enums import CampaignStatus, DiscoverySource, GeoMethod, ScoreBand
 
 router = APIRouter()
 
@@ -23,10 +24,32 @@ async def campaign_list(request: Request) -> HTMLResponse:
             select(Campaign).order_by(Campaign.created_at.desc())
         ).scalars().all()
 
+        # Per-campaign lead counts by score band
+        rows = session.execute(
+            select(
+                CompanyLead.campaign_id,
+                CompanyLead.score_band,
+                func.count().label("n"),
+            ).group_by(CompanyLead.campaign_id, CompanyLead.score_band)
+        ).all()
+
+    stats: dict[str, dict] = {}
+    for campaign_id, band, n in rows:
+        key = str(campaign_id)
+        if key not in stats:
+            stats[key] = {"total": 0, "hot": 0, "warm": 0, "cold": 0}
+        stats[key]["total"] += n
+        if band == ScoreBand.HOT:
+            stats[key]["hot"] += n
+        elif band == ScoreBand.WARM:
+            stats[key]["warm"] += n
+        elif band == ScoreBand.COLD:
+            stats[key]["cold"] += n
+
     return templates.TemplateResponse(
         request,
         "campaigns/list.html",
-        {"campaigns": campaigns},
+        {"campaigns": campaigns, "stats": stats},
     )
 
 

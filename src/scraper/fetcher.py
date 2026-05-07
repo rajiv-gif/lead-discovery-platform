@@ -18,6 +18,7 @@ from typing import Optional
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
+import certifi
 import httpx
 
 from src.config.settings import settings
@@ -173,13 +174,13 @@ class Fetcher:
         """Fetch *url* and return a ``FetchResult``.
 
         Returns a result with ``ok=False`` and ``error`` set if:
-        - robots.txt disallows the URL
+        - robots.txt disallows the URL (when RESPECT_ROBOTS_TXT=true)
         - The HTTP request raises a network-level exception
 
         Never raises; all errors are captured in the returned object.
         """
-        # Robots.txt check
-        if not self._robots.is_allowed(url):
+        # Robots.txt check (skipped when RESPECT_ROBOTS_TXT=false)
+        if settings.respect_robots_txt and not self._robots.is_allowed(url):
             log.info("robots.txt disallows %r — skipping", url)
             return FetchResult(
                 url=url,
@@ -201,6 +202,7 @@ class Fetcher:
                 headers={"User-Agent": _USER_AGENT},
                 timeout=timeout,
                 follow_redirects=True,
+                verify=certifi.where(),
             )
         except Exception as exc:
             log.warning("fetch error for %r: %s", url, exc)

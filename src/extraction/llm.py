@@ -1,4 +1,4 @@
-"""LLM-based extraction using Anthropic claude-3-5-haiku."""
+"""LLM-based extraction — supports Anthropic and Ollama (OpenAI-compatible)."""
 from __future__ import annotations
 
 import json
@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Protocol
 
 import anthropic
+import httpx
 
 from src.extraction.models import ExtractionResult, RawContact, RawEmail, RawPhone
 from src.models.company_page import CompanyPage
@@ -34,6 +35,32 @@ class AnthropicClient:
             messages=[{"role": "user", "content": user}],
         )
         return msg.content[0].text
+
+
+class OllamaClient:
+    """OpenAI-compatible client for a local Ollama server."""
+
+    def __init__(self, base_url: str, model: str, timeout: float = 240.0):
+        self._base_url = base_url.rstrip("/")
+        self._model = model
+        self._timeout = timeout
+
+    def complete(self, system: str, user: str, max_tokens: int) -> str:
+        resp = httpx.post(
+            f"{self._base_url}/v1/chat/completions",
+            json={
+                "model": self._model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "max_tokens": max_tokens,
+                "stream": False,
+            },
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
 
 # ---- Prompt ----
@@ -64,8 +91,18 @@ def build_user_prompt(page_text: str, company_name: str) -> str:
 # ---- Schema parse ----
 
 
+def _strip_fences(raw: str) -> str:
+    """Strip markdown code fences that some models wrap JSON in."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1]  # drop opening ```json line
+        if raw.endswith("```"):
+            raw = raw[: raw.rfind("```")]
+    return raw.strip()
+
+
 def _parse_response(raw: str, method: str = "llm") -> ExtractionResult:
-    data = json.loads(raw)  # raises json.JSONDecodeError if invalid
+    data = json.loads(_strip_fences(raw))  # raises json.JSONDecodeError if invalid
     result = ExtractionResult()
 
     for c in data.get("contacts", []) or []:
@@ -110,29 +147,51 @@ def call_llm(
     company_name: str,
     llm_runs_dir: Path,
     max_tokens: int = 1024,
+    max_retries: int = 2,
 ) -> Optional[ExtractionResult]:
+    """Call the LLM and parse the result, retrying on malformed JSON.
+
+    JSON parse failures are retried up to *max_retries* times — local models
+    like gemma4 are non-deterministic and often self-correct on a second attempt.
+    Network/timeout errors are not retried (they're unlikely to self-resolve).
+    """
     run_id = str(uuid.uuid4())
     artifact_path = llm_runs_dir / f"{run_id}.json"
     user_prompt = build_user_prompt(page.extracted_text or "", company_name)
 
     raw_response: Optional[str] = None
-    try:
-        raw_response = client.complete(
-            system=_SYSTEM_PROMPT,
-            user=user_prompt,
-            max_tokens=max_tokens,
-        )
-        result = _parse_response(raw_response)
-        _write_artifact(artifact_path, run_id, page, user_prompt, raw_response, status="ok")
-        return result
-    except json.JSONDecodeError as exc:
-        log.warning("LLM run %s: malformed JSON — %s", run_id, exc)
-        _write_artifact(artifact_path, run_id, page, user_prompt, raw_response, status="malformed", error=str(exc))
-        return None
-    except Exception as exc:
-        log.warning("LLM run %s: API/parse error — %s", run_id, exc)
-        _write_artifact(artifact_path, run_id, page, user_prompt, raw_response, status="error", error=str(exc))
-        return None
+    last_exc: Optional[Exception] = None
+
+    for attempt in range(1, max_retries + 2):   # +2 → initial attempt + max_retries retries
+        try:
+            raw_response = client.complete(
+                system=_SYSTEM_PROMPT,
+                user=user_prompt,
+                max_tokens=max_tokens,
+            )
+            result = _parse_response(raw_response)
+            _write_artifact(artifact_path, run_id, page, user_prompt, raw_response, status="ok")
+            if attempt > 1:
+                log.debug("LLM run %s: succeeded on attempt %d", run_id, attempt)
+            return result
+        except json.JSONDecodeError as exc:
+            last_exc = exc
+            if attempt <= max_retries:
+                log.debug("LLM run %s: malformed JSON (attempt %d/%d) — retrying",
+                          run_id, attempt, max_retries + 1)
+                continue
+            log.warning("LLM run %s: malformed JSON after %d attempts — %s", run_id, attempt, exc)
+            _write_artifact(artifact_path, run_id, page, user_prompt, raw_response,
+                            status="malformed", error=str(exc))
+            return None
+        except Exception as exc:
+            # Network errors, timeouts — don't retry, they're unlikely to self-resolve
+            log.warning("LLM run %s: API/parse error — %s", run_id, exc)
+            _write_artifact(artifact_path, run_id, page, user_prompt, raw_response,
+                            status="error", error=str(exc))
+            return None
+
+    return None  # unreachable, but satisfies type checker
 
 
 def _write_artifact(

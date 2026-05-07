@@ -1,15 +1,13 @@
-"""Web search client for ecommerce lead discovery.
+"""Web search clients for lead discovery.
 
-Uses DuckDuckGo's unofficial HTML endpoint — free, no API key required.
-Returns a list of ``WebSearchResult`` objects (url, title, snippet).
+Two implementations share the same ``search()`` interface:
 
-The client is intentionally thin so it can be swapped for Serper.dev or
-another paid provider later by replacing this module only.
+  DuckDuckGoClient  — free, no key, ~10 results/query, unofficial HTML endpoint.
+  SerperClient      — paid (serper.dev), Google-backed, up to 100 results/query.
+                      Set SERPER_API_KEY in .env; Serper is used automatically
+                      when the key is present.
 
-Limitations:
-  - DDG HTML structure can change without notice; parser may need updates.
-  - Rate-limited by DDG; use ``rate_limit_delay`` (default 2s) between calls.
-  - Returns ~10 organic results per query (DDG first page).
+Both return ``list[WebSearchResult]`` so the runner never needs to change.
 """
 from __future__ import annotations
 
@@ -36,6 +34,7 @@ _HEADERS = {
 # Domains to skip — ad networks, social media, aggregators that aren't leads
 _SKIP_DOMAINS = frozenset(
     {
+        # Search engines & social
         "duckduckgo.com",
         "google.com",
         "bing.com",
@@ -50,11 +49,46 @@ _SKIP_DOMAINS = frozenset(
         "pinterest.com",
         "reddit.com",
         "wikipedia.org",
+        # Big retail (not leads)
         "amazon.com",
         "ebay.com",
         "etsy.com",
         "walmart.com",
         "target.com",
+        # B2B directories & review sites (block scraping via robots.txt)
+        "clutch.co",
+        "wellfound.com",
+        "crunchbase.com",
+        "angellist.com",
+        "yelp.com",
+        "yelp.co.uk",
+        "zoominfo.com",
+        "apollo.io",
+        "getlatka.com",
+        "builtinsf.com",
+        "builtinnyc.com",
+        "builtinchicago.org",
+        "builtin.com",
+        "themanifest.com",
+        "sortlist.com",
+        "goodfirms.co",
+        "designrush.com",
+        "techbehemoths.com",
+        "topdevelopers.co",
+        "seedtable.com",
+        "tracxn.com",
+        "f6s.com",
+        "g2.com",
+        "capterra.com",
+        "trustpilot.com",
+        "glassdoor.com",
+        "indeed.com",
+        "tripleten.com",
+        # Shopify-specific aggregators
+        "findniche.com",
+        "myip.ms",
+        "shopify.com",
+        "apps.shopify.com",
     }
 )
 
@@ -269,3 +303,95 @@ def _extract_domain(url: str) -> str:
         return host.removeprefix("www.")
     except Exception:
         return ""
+
+
+class SerperClient:
+    """Google search via Serper.dev — up to 100 results per query.
+
+    Requires a SERPER_API_KEY. Sign up at https://serper.dev.
+    $50/mo for 50k queries; free tier available for testing.
+
+    Drops the same ``list[WebSearchResult]`` interface as DuckDuckGoClient
+    so the runner needs no changes when switching providers.
+    """
+
+    _ENDPOINT = "https://google.serper.dev/search"
+
+    def __init__(self, api_key: str, timeout: float = 15.0) -> None:
+        self._api_key = api_key
+        self._timeout = timeout
+
+    # Serper rejects num>10 for complex queries (quoted phrases, negations).
+    # Use pagination instead: fetch pages of 10 until max_results reached.
+    _PAGE_SIZE = 10
+
+    def search(self, query: str, max_results: int = 100) -> list[WebSearchResult]:
+        """Search Google via Serper and return up to *max_results* organic results.
+
+        Paginates in pages of 10 to stay compatible with all query types.
+
+        Args:
+            query: Search query string.
+            max_results: Target number of results. Default 100.
+
+        Returns:
+            List of ``WebSearchResult`` objects filtered against ``_SKIP_DOMAINS``.
+
+        Raises:
+            WebSearchError: On HTTP error, timeout, or unexpected response shape.
+        """
+        results: list[WebSearchResult] = []
+        page = 1
+
+        while len(results) < max_results:
+            try:
+                response = httpx.post(
+                    self._ENDPOINT,
+                    headers={"X-API-KEY": self._api_key, "Content-Type": "application/json"},
+                    json={"q": query, "num": self._PAGE_SIZE, "page": page},
+                    timeout=self._timeout,
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise WebSearchError(
+                    f"Serper returned HTTP {exc.response.status_code} for query {query!r}"
+                ) from exc
+            except httpx.RequestError as exc:
+                raise WebSearchError(
+                    f"Serper request failed for query {query!r}: {exc}"
+                ) from exc
+
+            try:
+                data = response.json()
+            except Exception as exc:
+                raise WebSearchError(f"Serper response not valid JSON: {exc}") from exc
+
+            organic = data.get("organic", [])
+            if not organic:
+                break  # no more results
+
+            for item in organic:
+                url = item.get("link", "")
+                if not url:
+                    continue
+                domain = _extract_domain(url)
+                if not domain or domain in _SKIP_DOMAINS:
+                    continue
+                results.append(
+                    WebSearchResult(
+                        url=url,
+                        title=item.get("title", ""),
+                        snippet=item.get("snippet", ""),
+                        domain=domain,
+                        query=query,
+                    )
+                )
+                if len(results) >= max_results:
+                    break
+
+            if len(organic) < self._PAGE_SIZE:
+                break  # last page reached
+            page += 1
+
+        log.debug("Serper query %r → %d results (%d pages)", query, len(results), page)
+        return results

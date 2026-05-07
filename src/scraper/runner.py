@@ -26,6 +26,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -76,6 +77,23 @@ class ScrapeSummary:
 # ---------------------------------------------------------------------------
 
 
+def _root_url(url: str) -> str | None:
+    """Return the root homepage URL (scheme + netloc) for a deep URL.
+
+    Returns None if the URL is already a root URL or cannot be parsed.
+    e.g. 'https://example.com/about/team' → 'https://example.com'
+         'https://example.com/' → None (already root)
+    """
+    try:
+        parsed = urlparse(url)
+        path = parsed.path.rstrip("/")
+        if not path or path == "":
+            return None  # already at root
+        return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return None
+
+
 def _extract_title_h1(html: str) -> tuple[str | None, str | None]:
     """Return (title_text, first_h1_text) from *html* using BeautifulSoup."""
     try:
@@ -95,6 +113,116 @@ def _extract_title_h1(html: str) -> tuple[str | None, str | None]:
 # ---------------------------------------------------------------------------
 
 
+def _scrape_shopify_store(
+    session: Session,
+    hit: DiscoveryHit,
+    company: Company,
+    fetcher: Fetcher,
+    summary: ScrapeSummary,
+) -> None:
+    """Scrape a confirmed Shopify .myshopify.com store.
+
+    Strategy (in order):
+      1. Try ``<store>/pages/contact`` — static, rarely rate-limited, has email/phone/address.
+      2. Try the store homepage (root .myshopify.com URL).
+      3. Fall back to a synthetic HTML page built from /products.json metadata already
+         in extra_fields — no network request, but also no contact info for the LLM.
+
+    All three outcomes mark the hit as SCRAPED so the pipeline never gets stuck.
+    """
+    extra = company.extra_fields or {}
+    myshopify_url = (extra.get("shopify_myshopify_url") or company.website or "").rstrip("/")
+    product_count = extra.get("shopify_product_count") or 0
+    price_min = extra.get("shopify_price_min") or 0
+    price_max = extra.get("shopify_price_max") or 0
+    domain = company.domain or urlparse(myshopify_url).netloc or myshopify_url
+
+    # Derive root store URL from the myshopify backend URL
+    parsed = urlparse(myshopify_url)
+    root_store_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else myshopify_url
+
+    # --- Attempt 1: /pages/contact ---
+    contact_url = f"{root_store_url}/pages/contact"
+    contact_result = fetcher.fetch(contact_url)
+    if contact_result.ok:
+        page, created = save_page(
+            session=session,
+            company_id=company.id,
+            result=contact_result,
+            page_type=PageType.CONTACT,
+            discovery_hit_id=hit.id,
+        )
+        summary.pages_saved += 1 if created else 0
+        summary.pages_deduplicated += 0 if created else 1
+        hit.status = DiscoveryHitStatus.SCRAPED
+        hit.error_message = None
+        summary.hits_scraped += 1
+        log.info("hit %s: Shopify contact page fetched for %r", hit.id, domain)
+        return
+
+    log.debug(
+        "hit %s: /pages/contact failed for %r (%s) — trying homepage",
+        hit.id, domain, contact_result.error,
+    )
+
+    # --- Attempt 2: store homepage ---
+    home_result = fetcher.fetch(root_store_url)
+    if home_result.ok:
+        page, created = save_page(
+            session=session,
+            company_id=company.id,
+            result=home_result,
+            page_type=PageType.HOMEPAGE,
+            discovery_hit_id=hit.id,
+        )
+        summary.pages_saved += 1 if created else 0
+        summary.pages_deduplicated += 0 if created else 1
+        hit.status = DiscoveryHitStatus.SCRAPED
+        hit.error_message = None
+        summary.hits_scraped += 1
+        log.info("hit %s: Shopify homepage fetched for %r", hit.id, domain)
+        return
+
+    log.debug(
+        "hit %s: homepage failed for %r (%s) — using synthetic fallback",
+        hit.id, domain, home_result.error,
+    )
+
+    # --- Attempt 3: synthetic fallback ---
+    html = (
+        f"<html><head><title>{domain}</title></head><body>"
+        f"<h1>{domain}</h1>"
+        f"<p>Shopify ecommerce store with {product_count} products. "
+        f"Price range: {price_min:.0f}–{price_max:.0f} EUR.</p>"
+        f"<p>Store backend URL: {myshopify_url}</p>"
+        f"<p>Website: {company.website}</p>"
+        f"</body></html>"
+    )
+    result = FetchResult(
+        url=root_store_url,
+        final_url=root_store_url,
+        html=html,
+        status_code=200,
+        content_type="text/html",
+    )
+    page, created = save_page(
+        session=session,
+        company_id=company.id,
+        result=result,
+        page_type=PageType.HOMEPAGE,
+        discovery_hit_id=hit.id,
+    )
+    summary.pages_saved += 1 if created else 0
+    summary.pages_deduplicated += 0 if created else 1
+    hit.status = DiscoveryHitStatus.SCRAPED
+    hit.error_message = None
+    summary.hits_scraped += 1
+    log.info(
+        "hit %s: synthetic Shopify fallback for %r (%d products, %.0f–%.0f EUR)",
+        hit.id, domain, product_count, price_min, price_max,
+    )
+
+
 def _scrape_hit(
     session: Session,
     hit: DiscoveryHit,
@@ -103,6 +231,15 @@ def _scrape_hit(
     summary: ScrapeSummary,
 ) -> None:
     """Scrape all pages for one ``DiscoveryHit`` in-place, updating *summary*."""
+    # Confirmed Shopify .myshopify.com stores: use the dedicated Shopify scraper
+    # that tries /pages/contact → homepage → synthetic fallback, avoiding the deep
+    # product-page URLs that Shopify CDN aggressively rate-limits (429).
+    extra = company.extra_fields or {}
+    website_host = urlparse(company.website or "").netloc.lower()
+    if extra.get("platform") == "shopify" and website_host.endswith(".myshopify.com"):
+        _scrape_shopify_store(session, hit, company, fetcher, summary)
+        return
+
     website = company.website
     if not website:
         log.info("hit %s: company %s has no website — skipping", hit.id, company.id)
@@ -112,6 +249,23 @@ def _scrape_hit(
 
     # --- Fetch homepage ---
     homepage_result: FetchResult = fetcher.fetch(website)
+
+    if not homepage_result.ok:
+        # Deep URL failed — try the root domain before giving up.
+        # Serper often returns sub-pages (e.g. /about/, /services/) that block
+        # scraping while the root homepage is accessible.
+        root = _root_url(website)
+        if root:
+            log.info(
+                "hit %s: deep URL %r failed (%s) — trying root %r",
+                hit.id, website, homepage_result.error, root,
+            )
+            homepage_result = fetcher.fetch(root)
+            if homepage_result.ok:
+                # Update stored website to root so future runs go straight there
+                company.website = root
+                website = root
+                log.info("hit %s: root fallback succeeded for %r", hit.id, root)
 
     if not homepage_result.ok:
         log.warning(
