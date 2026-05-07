@@ -6,6 +6,7 @@ from typing import Optional
 
 from src.models.enums import EmailStatus, PageType, PhoneType, ScoreBand
 from src.scoring.aeo import AeoSignals
+from src.scoring.tech_signals import TechSignals
 
 
 @dataclass
@@ -26,6 +27,7 @@ def compute_score(
     website_reachable: bool,
     is_suppressed: bool,
     aeo_signals: AeoSignals | None = None,
+    tech_signals: TechSignals | None = None,
     require_contact: bool = True,
 ) -> ScoringResult:
     """Compute a quality score for a company/lead.
@@ -126,6 +128,27 @@ def compute_score(
     if company.country:
         dim_e += 3
 
+    # --- Dimension G: Tech Gap Opportunity (max 10) ---
+    # Higher score = more marketing tech gaps = stronger prospect for digital agencies.
+    # Each gap is a potential service to pitch (ads, analytics, chat, etc.).
+    #   +4  not running any paid ads (no Google Ads, Meta Pixel, or TikTok Pixel)
+    #   +2  no Google Analytics (flying blind on traffic)
+    #   +2  no live chat widget (visitor engagement gap)
+    #   +1  no blog/content section (content marketing gap)
+    #   +1  no cookie banner despite EU traffic (compliance gap)
+    dim_g = 0
+    if tech_signals is not None:
+        if not tech_signals.running_paid_ads:
+            dim_g += 4
+        if tech_signals.missing_analytics:
+            dim_g += 2
+        if not tech_signals.has_chat:
+            dim_g += 2
+        if not tech_signals.has_blog:
+            dim_g += 1
+        if not tech_signals.has_cookie_banner:
+            dim_g += 1
+
     # --- Dimension F: AEO Opportunity (max 15) ---
     # Higher score = more gaps in site optimisation = stronger sales prospect
     # for AEO / AI-search services.
@@ -147,7 +170,7 @@ def compute_score(
         if not aeo_signals.is_https:
             dim_f += 2
 
-    total = dim_a + dim_b + dim_c + dim_d + dim_e + dim_f
+    total = dim_a + dim_b + dim_c + dim_d + dim_e + dim_f + dim_g
 
     # --- Score band ---
     if total >= 75:
@@ -163,6 +186,8 @@ def compute_score(
         "verification_quality": dim_c,
         "scrape_quality": dim_d,
         "location": dim_e,
+        "tech_gap": dim_g,
+        "tech_signals": tech_signals.as_dict() if tech_signals else None,
         "aeo_opportunity": dim_f,
         "website_reachable": website_reachable,
         "aeo_signals": {

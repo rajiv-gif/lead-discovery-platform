@@ -15,6 +15,7 @@ from src.models.enums import LeadStatus, ReviewStatus, SuppressionType
 from src.models.suppression_list import SuppressionList
 from src.scoring.aeo import detect_aeo_signals
 from src.scoring.scorer import ScoringResult, compute_score
+from src.scoring.tech_signals import detect_tech_signals
 
 
 def check_suppression(session: Session, company) -> bool:
@@ -101,6 +102,7 @@ def derive_company_lead(
     """
     is_suppressed = check_suppression(session, company)
     aeo_signals = detect_aeo_signals(pages)
+    tech_signals = detect_tech_signals(pages)
     scoring_result: ScoringResult = compute_score(
         company=company,
         contacts=contacts,
@@ -110,6 +112,7 @@ def derive_company_lead(
         website_reachable=website_reachable,
         is_suppressed=is_suppressed,
         aeo_signals=aeo_signals,
+        tech_signals=tech_signals,
         require_contact=require_contact,
     )
 
