@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base
-from src.models.enums import CampaignStatus, DiscoverySource, GeoMethod
+from src.models.enums import CampaignGoal, CampaignStatus, DiscoverySource, GeoMethod
 from src.models.mixins import TimestampMixin, UUIDPrimaryKey
 
 if TYPE_CHECKING:
@@ -46,6 +46,16 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
         nullable=False,
         default=CampaignStatus.DRAFT,
         index=True,
+    )
+
+    # --- Campaign goal ---
+    # LEAD_GEN (default) — current behaviour, unchanged.
+    # WEB_AGENCY — surface businesses with no/outdated website; gated by WEB_AGENCY_ENABLED.
+    campaign_goal: Mapped[CampaignGoal] = mapped_column(
+        SAEnum(CampaignGoal, name="campaigngoal", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=CampaignGoal.LEAD_GEN,
+        server_default="lead_gen",
     )
 
     # --- Discovery source ---

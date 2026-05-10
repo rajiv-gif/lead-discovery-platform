@@ -71,6 +71,9 @@
     <div style="flex:1; min-width:0">
       <div style="display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; margin-bottom:.5rem">
         <span style="font-family:var(--font-head); font-weight:700; font-size:1rem">{{ ld.company.name }}</span>
+        {% if not ld.company.has_website %}
+        <span class="badge" style="border-color:var(--accent); color:var(--accent); font-size:.65rem">✦ No website</span>
+        {% endif %}
         {% if ld.company.city %}
         <span class="muted" style="font-size:.82rem">{{ ld.company.city }}{% if ld.company.state %}, {{ ld.company.state }}{% endif %}</span>
         {% endif %}

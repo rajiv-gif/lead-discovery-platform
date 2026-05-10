@@ -28,6 +28,9 @@
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px">
           <span style="font-family:var(--display); font-weight:600; font-size:15px; letter-spacing:-0.02em; color:var(--ink)">{{ c.name }}</span>
           <span class="badge badge-{{ c.status.value }}"><span class="dot"></span>{{ c.status.value }}</span>
+          {% if c.campaign_goal and c.campaign_goal.value == 'web_agency' %}
+          <span class="badge" style="border-color:var(--accent); color:var(--accent); opacity:.85">web agency</span>
+          {% endif %}
           {% if c.ecommerce_platform %}
           <span class="badge" style="border-color:var(--rule-soft); color:var(--ink-3)">{{ c.ecommerce_platform }}</span>
           {% endif %}

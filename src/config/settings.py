@@ -78,6 +78,11 @@ class Settings:
         # --- Export ---
         self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
 
+        # --- Web Agency feature flag ---
+        # Set WEB_AGENCY_ENABLED=true to unlock the WEB_AGENCY campaign goal in
+        # the dashboard and CLI. Off by default — feature is not yet public.
+        self.web_agency_enabled: bool = os.getenv("WEB_AGENCY_ENABLED", "false").lower() == "true"
+
         # --- Dashboard auth ---
         # Set all three to enable the login page. If username/password are unset,
         # the login page is shown but any credentials are accepted (dev mode only).

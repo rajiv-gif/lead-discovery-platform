@@ -76,6 +76,7 @@ def upsert_company(session: Session, result: PlaceResult) -> tuple[Company, bool
     company = Company(
         name=result.name,
         website=result.website_uri,
+        has_website=bool(result.website_uri),
         domain=result.domain,
         google_place_id=result.place_id,
         address=result.formatted_address,
@@ -159,6 +160,8 @@ def _merge_fields(company: Company, result: PlaceResult) -> None:
         company.name = result.name
     if not company.website and result.website_uri:
         company.website = result.website_uri
+    # Always sync has_website from the latest Places payload — Places is authoritative.
+    company.has_website = bool(result.website_uri)
     if not company.domain and result.domain:
         company.domain = result.domain
     if not company.address and result.formatted_address:

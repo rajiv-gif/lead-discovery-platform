@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from src.models.company_lead import CompanyLead
 from src.models.enums import LeadStatus, ReviewStatus, SuppressionType
 from src.models.suppression_list import SuppressionList
+from src.models.enums import CampaignGoal
 from src.scoring.aeo import detect_aeo_signals
 from src.scoring.scorer import ScoringResult, compute_score
 from src.scoring.tech_signals import detect_tech_signals
+from src.scoring.website_gap import detect_website_gap
 
 
 def check_suppression(session: Session, company) -> bool:
@@ -92,6 +94,8 @@ def derive_company_lead(
     campaign_id: uuid.UUID,
     website_reachable: bool,
     require_contact: bool = True,
+    campaign_goal: CampaignGoal = CampaignGoal.LEAD_GEN,
+    pages_dir=None,
 ) -> CompanyLead:
     """Create or update the :class:`CompanyLead` for *company*.
 
@@ -100,9 +104,12 @@ def derive_company_lead(
                review_status and campaign_id are preserved.
                If newly disqualified, status is set to DISQUALIFIED.
     """
+    from pathlib import Path
     is_suppressed = check_suppression(session, company)
     aeo_signals = detect_aeo_signals(pages)
     tech_signals = detect_tech_signals(pages)
+    base_path = Path(pages_dir) if pages_dir else None
+    website_gap = detect_website_gap(company, pages, base_path=base_path)
     scoring_result: ScoringResult = compute_score(
         company=company,
         contacts=contacts,
@@ -113,6 +120,8 @@ def derive_company_lead(
         is_suppressed=is_suppressed,
         aeo_signals=aeo_signals,
         tech_signals=tech_signals,
+        website_gap=website_gap,
+        campaign_goal=campaign_goal,
         require_contact=require_contact,
     )
 

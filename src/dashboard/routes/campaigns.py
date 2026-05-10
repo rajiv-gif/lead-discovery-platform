@@ -7,12 +7,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
+from src.config.settings import settings
 from src.dashboard.deps import templates
 from src.db.session import get_session
 from src.discovery.city_lists import get_countries, get_states
 from src.models.campaign import Campaign
 from src.models.company_lead import CompanyLead
-from src.models.enums import CampaignStatus, DiscoverySource, GeoMethod, ScoreBand
+from src.models.enums import CampaignGoal, CampaignStatus, DiscoverySource, GeoMethod, ScoreBand
 
 router = APIRouter()
 
@@ -49,7 +50,7 @@ async def campaign_list(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "campaigns/list.html",
-        {"campaigns": campaigns, "stats": stats},
+        {"campaigns": campaigns, "stats": stats, "web_agency_enabled": settings.web_agency_enabled},
     )
 
 
@@ -63,6 +64,7 @@ async def campaign_create_form(request: Request) -> HTMLResponse:
             "countries": get_countries(),
             "us_states": get_states("United States"),
             "error": None,
+            "web_agency_enabled": settings.web_agency_enabled,
         },
     )
 
@@ -76,6 +78,18 @@ async def campaign_create(request: Request):
     description = (form.get("description") or "").strip() or None
     discovery_source_raw = (form.get("discovery_source") or "google_places").strip()
 
+    # Campaign goal — WEB_AGENCY only honoured when feature flag is on.
+    campaign_goal_raw = (form.get("campaign_goal") or "lead_gen").strip()
+    if campaign_goal_raw == CampaignGoal.WEB_AGENCY.value and not settings.web_agency_enabled:
+        campaign_goal_raw = CampaignGoal.LEAD_GEN.value
+    try:
+        campaign_goal = CampaignGoal(campaign_goal_raw)
+    except ValueError:
+        campaign_goal = CampaignGoal.LEAD_GEN
+    # WEB_AGENCY campaigns are always Places-based (web search irrelevant for local no-website hunt)
+    if campaign_goal == CampaignGoal.WEB_AGENCY:
+        discovery_source_raw = DiscoverySource.GOOGLE_PLACES.value
+
     def _err(msg: str) -> HTMLResponse:
         return templates.TemplateResponse(
             request,
@@ -86,6 +100,7 @@ async def campaign_create(request: Request):
                 "us_states": get_states("United States"),
                 "error": msg,
                 "form": dict(form),
+                "web_agency_enabled": settings.web_agency_enabled,
             },
             status_code=422,
         )
@@ -179,6 +194,7 @@ async def campaign_create(request: Request):
             description=description,
             niche=niche,
             status=CampaignStatus.DRAFT,
+            campaign_goal=campaign_goal,
             discovery_source=DiscoverySource.GOOGLE_PLACES,
             geo_method=geo_method,
             geo_city=city,

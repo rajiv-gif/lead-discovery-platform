@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Integer, Text
+from sqlalchemy import Boolean, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,10 @@ class Company(UUIDPrimaryKey, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(Text, nullable=False)
     website: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # True when the business has a website (set from Places API website_uri field).
+    # False when website_uri is absent — used by WEB_AGENCY campaigns to fast-path
+    # these businesses through the pipeline (no scrape, no LLM extraction needed).
+    has_website: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     # domain is extracted from website for dedup and suppression lookups
     domain: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     # Stable Google Places place_id — primary dedup key for Places-sourced companies.

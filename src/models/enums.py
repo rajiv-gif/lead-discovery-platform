@@ -61,6 +61,19 @@ class DiscoverySource(str, enum.Enum):
     WEB_SEARCH = "web_search"
 
 
+class CampaignGoal(str, enum.Enum):
+    """High-level intent for what a campaign is trying to find.
+
+    LEAD_GEN   — default; find businesses with rich contact data for outreach.
+    WEB_AGENCY — find local businesses with no website or an outdated one;
+                 intended for web / AI-site agencies doing cold outreach.
+                 Gated behind WEB_AGENCY_ENABLED=true in .env.
+    """
+
+    LEAD_GEN = "lead_gen"
+    WEB_AGENCY = "web_agency"
+
+
 class EmailStatus(str, enum.Enum):
     UNVERIFIED = "unverified"
     VALID = "valid"

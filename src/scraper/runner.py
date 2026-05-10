@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from src.db.session import get_session
 from src.models.company import Company
 from src.models.discovery_hit import DiscoveryHit
-from src.models.enums import DiscoveryHitStatus, PageType
+from src.models.enums import CampaignGoal, DiscoveryHitStatus, PageType
 from src.scraper.classifier import classify_page
 from src.scraper.fetcher import Fetcher, FetchResult, RobotCache
 from src.scraper.page_finder import find_supplemental_urls
@@ -229,8 +229,21 @@ def _scrape_hit(
     company: Company,
     fetcher: Fetcher,
     summary: ScrapeSummary,
+    campaign_goal: CampaignGoal = CampaignGoal.LEAD_GEN,
 ) -> None:
     """Scrape all pages for one ``DiscoveryHit`` in-place, updating *summary*."""
+    # WEB_AGENCY short-circuit: businesses with no website need no scraping.
+    # Mark them SCRAPED immediately so they continue to verification → scoring
+    # where the website-gap dimension rewards them.
+    if not company.has_website and campaign_goal == CampaignGoal.WEB_AGENCY:
+        log.info(
+            "hit %s: no website (web_agency campaign) — fast-pathing to scraped",
+            hit.id,
+        )
+        hit.status = DiscoveryHitStatus.SCRAPED
+        summary.hits_scraped += 1
+        return
+
     # Confirmed Shopify .myshopify.com stores: use the dedicated Shopify scraper
     # that tries /pages/contact → homepage → synthetic fallback, avoiding the deep
     # product-page URLs that Shopify CDN aggressively rate-limits (429).
@@ -377,7 +390,7 @@ def run_scrape_for_campaign(campaign_id: uuid.UUID) -> ScrapeSummary:
                 continue
 
             try:
-                _scrape_hit(session, hit, company, fetcher, summary)
+                _scrape_hit(session, hit, company, fetcher, summary, campaign.campaign_goal)
             except Exception as exc:
                 log.exception("hit %s: unexpected error", hit.id)
                 hit.status = DiscoveryHitStatus.FAILED

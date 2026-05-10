@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}New Campaign — Lead Discovery{% endblock %}
+{% block title %}New Campaign — Leadry{% endblock %}
 
 {% block content %}
 <a href="/" class="page-back">← Campaigns</a>
@@ -34,8 +34,35 @@
       </div>
     </div>
 
-    <!-- ── Discovery source toggle ───────────────────────────────── -->
+    {% if web_agency_enabled %}
+    <!-- ── Campaign goal toggle (WEB_AGENCY_ENABLED=true only) ──── -->
     <div class="card" style="margin-bottom:1.25rem">
+      <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-bottom:1rem">Campaign goal</div>
+      <div style="display:flex; gap:.75rem; flex-wrap:wrap">
+        <label id="goal-label-leadgen" style="display:flex; align-items:center; gap:.5rem; cursor:pointer; padding:.55rem .9rem; border:1px solid var(--rule); border-radius:6px; flex:1; min-width:180px">
+          <input type="radio" name="campaign_goal" value="lead_gen" onchange="updateGoal()"
+                 {% if not form or (form.campaign_goal|default('lead_gen')) == 'lead_gen' %}checked{% endif %}
+                 style="accent-color:var(--accent)">
+          <div>
+            <div style="font-size:.88rem; font-weight:500">Lead Gen</div>
+            <div style="font-size:.75rem; color:var(--ink-3)">Find businesses with contact data</div>
+          </div>
+        </label>
+        <label id="goal-label-webagency" style="display:flex; align-items:center; gap:.5rem; cursor:pointer; padding:.55rem .9rem; border:1px solid var(--rule); border-radius:6px; flex:1; min-width:180px">
+          <input type="radio" name="campaign_goal" value="web_agency" onchange="updateGoal()"
+                 {% if form and form.campaign_goal == 'web_agency' %}checked{% endif %}
+                 style="accent-color:var(--accent)">
+          <div>
+            <div style="font-size:.88rem; font-weight:500">Web Agency</div>
+            <div style="font-size:.75rem; color:var(--ink-3)">Find businesses with no/outdated website</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Discovery source toggle ───────────────────────────────── -->
+    <div class="card" style="margin-bottom:1.25rem" id="section-discovery-source">
       <div style="font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:1rem">Discovery Source</div>
 
       <div style="display:flex; gap:.75rem; flex-wrap:wrap">
@@ -256,8 +283,26 @@
     });
   }
 
+  function updateGoal() {
+    const goalInput = document.querySelector('input[name="campaign_goal"]:checked');
+    const isWebAgency = goalInput && goalInput.value === "web_agency";
+    const srcSection = document.getElementById("section-discovery-source");
+    if (srcSection) srcSection.style.display = isWebAgency ? "none" : "";
+    // Lock discovery source to google_places for web_agency
+    if (isWebAgency) {
+      const placesRadio = document.querySelector('input[name="discovery_source"][value="google_places"]');
+      if (placesRadio) placesRadio.checked = true;
+    }
+    updateSource();
+    // Relabel niche field
+    const nicheLabel = document.querySelector('label[for="niche"]');
+    if (nicheLabel) nicheLabel.childNodes[0].textContent = isWebAgency ? "Business type " : "Niche ";
+  }
+
   function updateSource() {
-    const isWeb = document.querySelector('input[name="discovery_source"]:checked').value === "web_search";
+    const goalInput = document.querySelector('input[name="campaign_goal"]:checked');
+    const isWebAgency = goalInput && goalInput.value === "web_agency";
+    const isWeb = !isWebAgency && document.querySelector('input[name="discovery_source"]:checked').value === "web_search";
     document.getElementById("section-places").style.display = isWeb ? "none" : "";
     document.getElementById("section-web").style.display = isWeb ? "" : "none";
   }
@@ -290,7 +335,7 @@
 
   document.addEventListener("DOMContentLoaded", function() {
     updateGeoFields();
-    updateSource();
+    updateGoal();
     updatePlatformHint();
   });
 </script>

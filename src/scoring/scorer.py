@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from src.models.enums import EmailStatus, PageType, PhoneType, ScoreBand
+from src.models.enums import CampaignGoal, EmailStatus, PageType, PhoneType, ScoreBand
 from src.scoring.aeo import AeoSignals
 from src.scoring.tech_signals import TechSignals
+from src.scoring.website_gap import WebsiteGapSignals
 
 
 @dataclass
@@ -28,6 +29,8 @@ def compute_score(
     is_suppressed: bool,
     aeo_signals: AeoSignals | None = None,
     tech_signals: TechSignals | None = None,
+    website_gap: WebsiteGapSignals | None = None,
+    campaign_goal: CampaignGoal = CampaignGoal.LEAD_GEN,
     require_contact: bool = True,
 ) -> ScoringResult:
     """Compute a quality score for a company/lead.
@@ -55,7 +58,11 @@ def compute_score(
             disqualification_reason="company name is missing",
         )
 
-    if require_contact and not emails and not phones:
+    # WEB_AGENCY campaigns: the *absence* of a website is itself the lead signal,
+    # so we never disqualify for missing contact data. Contact info from Places
+    # (phone, address) is sufficient for a cold-outreach pitch.
+    effective_require_contact = require_contact and campaign_goal != CampaignGoal.WEB_AGENCY
+    if effective_require_contact and not emails and not phones:
         return ScoringResult(
             score=0.0,
             score_band=ScoreBand.DISQUALIFIED,
@@ -170,7 +177,31 @@ def compute_score(
         if not aeo_signals.is_https:
             dim_f += 2
 
-    total = dim_a + dim_b + dim_c + dim_d + dim_e + dim_f + dim_g
+    # --- Dimension H: Website Gap Opportunity (max 30, WEB_AGENCY only) ---
+    # Higher score = bigger website gap = stronger prospect for a web/AI-site agency.
+    #   +30  no website at all (immediately actionable pitch)
+    #   +8   has website but not HTTPS (looks untrustworthy / outdated)
+    #   +7   no mobile viewport (site not mobile-friendly)
+    #   +7   copyright year ≥ 3 years old (visibly dated)
+    #   +5   no social media links (isolated online presence)
+    #   +3   thin content < 100 words (placeholder or abandoned site)
+    dim_h = 0
+    if campaign_goal == CampaignGoal.WEB_AGENCY and website_gap is not None:
+        if not website_gap.has_website:
+            dim_h += 30
+        else:
+            if not website_gap.is_https:
+                dim_h += 8
+            if not website_gap.has_viewport:
+                dim_h += 7
+            if website_gap.copyright_year_age >= 3:
+                dim_h += 7
+            if not website_gap.has_social_links:
+                dim_h += 5
+            if website_gap.word_count < 100:
+                dim_h += 3
+
+    total = dim_a + dim_b + dim_c + dim_d + dim_e + dim_f + dim_g + dim_h
 
     # --- Score band ---
     if total >= 75:
@@ -197,6 +228,16 @@ def compute_score(
             "has_og_tags": aeo_signals.has_og_tags if aeo_signals else None,
             "is_https": aeo_signals.is_https if aeo_signals else None,
         },
+        "website_gap": dim_h,
+        "website_gap_signals": {
+            "has_website": website_gap.has_website if website_gap else None,
+            "is_https": website_gap.is_https if website_gap else None,
+            "has_viewport": website_gap.has_viewport if website_gap else None,
+            "copyright_year_age": website_gap.copyright_year_age if website_gap else None,
+            "has_social_links": website_gap.has_social_links if website_gap else None,
+            "word_count": website_gap.word_count if website_gap else None,
+            "website_status": website_gap.website_status if website_gap else None,
+        } if website_gap else None,
         "total": total,
     }
 

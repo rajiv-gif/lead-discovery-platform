@@ -59,6 +59,8 @@ COMPANY_FALLBACK_FIELDS = [
 FULL_LEADS_FIELDS = [
     "company_name",
     "website",
+    "website_status",
+    "website_gap_score",
     "email",
     "phone",
     "address",
@@ -521,9 +523,16 @@ def build_full_leads_rows(
         if cd.lead.review_decided_at is not None:
             review_approved_at_str = cd.lead.review_decided_at.isoformat()
 
+        # Website gap signals — read from score_details if available
+        _gap_signals = (cd.lead.score_details or {}).get("website_gap_signals") or {}
+        website_status = _gap_signals.get("website_status") or ("none" if not cd.company.has_website else "present")
+        website_gap_score = (cd.lead.score_details or {}).get("website_gap", "")
+
         rows.append({
             "company_name": cd.company.name,
             "website": cd.company.website or "",
+            "website_status": website_status,
+            "website_gap_score": website_gap_score,
             "email": best_email,
             "phone": best_phone,
             "address": cd.company.address or "",
