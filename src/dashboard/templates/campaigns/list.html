@@ -1,64 +1,78 @@
 {% extends "base.html" %}
-{% block title %}Campaigns — Lead Discovery{% endblock %}
+{% block title %}Campaigns — Spotter{% endblock %}
 
 {% block content %}
-<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem">
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem; gap:1rem; flex-wrap:wrap">
   <div>
+    <div class="eyebrow" style="margin-bottom:8px">Lead discovery</div>
     <h1>Campaigns</h1>
-    <p class="muted" style="margin-top:.3rem; font-size:.88rem">{{ campaigns|length }} campaign{{ 's' if campaigns|length != 1 else '' }}</p>
+    <p style="margin-top:5px; font-size:13px; color:var(--ink-3); font-family:var(--mono)">
+      {{ campaigns|length }} campaign{{ 's' if campaigns|length != 1 else '' }}
+    </p>
   </div>
   <a href="/campaigns/new" class="btn btn-primary">
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="7" y1="1" x2="7" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    New campaign
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    New campaign <span class="arrow">→</span>
   </a>
 </div>
 
 {% if campaigns %}
-<div style="display:flex; flex-direction:column; gap:.75rem">
+<div style="display:flex; flex-direction:column; gap:1px; border: 1px solid var(--rule); border-radius: var(--r-lg); overflow:hidden; background:var(--rule-soft)">
   {% for c in campaigns %}
-  <a href="/campaigns/{{ c.id }}" style="text-decoration:none; color:inherit; display:block">
-    <div class="card" style="border-left: 3px solid {% if c.status.value == 'active' %}var(--green){% elif c.status.value == 'draft' %}var(--border-2){% else %}var(--text-3){% endif %}; transition: border-color .15s, background .15s; cursor:pointer" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--surface)'">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem">
-        <div style="min-width:0; flex:1">
-          <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap">
-            <span style="font-family:var(--font-head); font-weight:700; font-size:1rem">{{ c.name }}</span>
-            <span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span>
-          </div>
-          <div style="margin-top:.35rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
-            <span class="muted" style="font-size:.82rem; font-family:var(--font-mono)">{{ c.niche }}</span>
-            <span class="muted" style="font-size:.82rem">·</span>
-            <span class="muted" style="font-size:.82rem">{{ c.created_at.strftime("%b %d, %Y") if c.created_at else "—" }}</span>
-          </div>
+  {%- set s = stats.get(c.id | string, {}) %}
+  <a href="/campaigns/{{ c.id }}" style="text-decoration:none; color:inherit; display:block; background:var(--paper-2); transition: background .15s" onmouseover="this.style.background='var(--paper-3)'" onmouseout="this.style.background='var(--paper-2)'">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 24px">
+
+      <!-- Left: name + meta -->
+      <div style="min-width:0; flex:1">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px">
+          <span style="font-family:var(--display); font-weight:600; font-size:15px; letter-spacing:-0.02em; color:var(--ink)">{{ c.name }}</span>
+          <span class="badge badge-{{ c.status.value }}"><span class="dot"></span>{{ c.status.value }}</span>
+          {% if c.ecommerce_platform %}
+          <span class="badge" style="border-color:var(--rule-soft); color:var(--ink-3)">{{ c.ecommerce_platform }}</span>
+          {% endif %}
         </div>
-        {%- set s = stats.get(c.id | string, {}) %}
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+          <span style="font-family:var(--mono); font-size:11px; color:var(--ink-3)">{{ c.niche or '—' }}</span>
+          <span style="color:var(--rule); font-size:11px">·</span>
+          <span style="font-family:var(--mono); font-size:11px; color:var(--ink-3)">{{ c.created_at.strftime("%b %d, %Y") if c.created_at else "—" }}</span>
+        </div>
+      </div>
+
+      <!-- Right: lead counts -->
+      <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
         {% if s.get('total', 0) > 0 %}
-        <div style="display:flex; align-items:center; gap:.5rem; flex-shrink:0">
-          <span style="font-size:.82rem; color:var(--text-2)">{{ s.total }} lead{{ 's' if s.total != 1 else '' }}</span>
+          <span style="font-family:var(--mono); font-size:12px; color:var(--ink-3)">{{ s.total }} leads</span>
           {% if s.get('hot', 0) > 0 %}
-          <span class="badge badge-hot" style="font-size:.75rem">{{ s.hot }} HOT</span>
+          <span class="badge badge-hot"><span class="dot"></span>{{ s.hot }} hot</span>
           {% endif %}
           {% if s.get('warm', 0) > 0 %}
-          <span class="badge badge-warm" style="font-size:.75rem">{{ s.warm }} WARM</span>
+          <span class="badge badge-warm">{{ s.warm }} warm</span>
           {% endif %}
-        </div>
         {% endif %}
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color:var(--text-3); flex-shrink:0"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color:var(--rule); margin-left:4px; flex-shrink:0"><path d="M5 2.5l4.5 4.5L5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
+
     </div>
   </a>
   {% endfor %}
 </div>
 
 {% else %}
-<div class="card" style="text-align:center; padding:4rem 2rem">
-  <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="margin:0 auto 1rem; display:block; color:var(--text-3)">
-    <circle cx="20" cy="20" r="10" stroke="currentColor" stroke-width="1.5" fill="none"/>
-    <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1" fill="none" opacity=".4"/>
-    <line x1="20" y1="5" x2="20" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="35" y1="20" x2="30" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+<div style="text-align:center; padding:80px 24px; border: 1px solid var(--rule-soft); border-radius: var(--r-lg); background: var(--paper-2)">
+  <!-- Spotter crosshair icon -->
+  <svg width="44" height="44" viewBox="0 0 44 44" fill="none" style="margin:0 auto 20px; color:var(--ink-3)">
+    <circle cx="22" cy="22" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+    <circle cx="22" cy="22" r="14" stroke="currentColor" stroke-width="1" fill="none" opacity=".4"/>
+    <line x1="22" y1="4" x2="22" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="22" y1="33" x2="22" y2="40" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="4" y1="22" x2="11" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="33" y1="22" x2="40" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="22" cy="22" r="2.5" fill="var(--accent)"/>
   </svg>
-  <p style="color:var(--text-2); margin-bottom:1.25rem">No campaigns yet.</p>
-  <a href="/campaigns/new" class="btn btn-primary">Create your first campaign</a>
+  <p style="font-family:var(--display); font-weight:600; font-size:17px; letter-spacing:-0.02em; margin-bottom:8px">No campaigns yet</p>
+  <p style="font-size:13px; color:var(--ink-3); margin-bottom:24px">Create your first campaign to start discovering leads.</p>
+  <a href="/campaigns/new" class="btn btn-primary">New campaign <span class="arrow">→</span></a>
 </div>
 {% endif %}
 {% endblock %}
