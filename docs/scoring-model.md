@@ -1,11 +1,11 @@
 ---
 title: Scoring Model
-tags: [scoring, lead-quality]
+tags: [scoring, lead-quality, aeo, tech-signals]
 ---
 
 # Scoring Model
 
-Every lead receives a numeric score (0–100) and a score band after verification. The score drives review prioritization and export filtering.
+Every lead receives a numeric score and a score band after verification. The score drives review prioritisation and export filtering.
 
 See [[pipeline]] for where scoring sits and [[database-schema]] for how scores are stored.
 
@@ -13,115 +13,166 @@ See [[pipeline]] for where scoring sits and [[database-schema]] for how scores a
 
 | Band | Score Range | Meaning |
 |------|-------------|---------|
-| `hot` | 75–100 | High-quality, contact-ready lead |
-| `warm` | 50–74 | Usable but incomplete or partially verified |
-| `cold` | 25–49 | Poor data quality, low confidence |
-| `disqualified` | 0–24 | Missing critical fields or failed verification |
+| `HOT` | ≥ 75 | High-quality, contact-ready lead |
+| `WARM` | 50–74 | Usable but incomplete or partially verified |
+| `COLD` | < 50 | Poor data quality or low confidence |
+| `DISQUALIFIED` | 0 | Hard disqualification (see below) |
 
-Leads below a configurable minimum score threshold (default: 25) are excluded from the review queue entirely.
+## Hard Disqualification Rules
+
+Applied before the score is computed. Any one of these triggers immediate disqualification:
+
+1. `company.name` is null or empty
+2. No emails **and** no phones — unless the campaign sets `require_contact=False` (used for web-search / ecommerce campaigns where contact forms are the norm)
+3. Company matches an active suppression entry (domain, email, or name)
 
 ## Scoring Dimensions
 
-The score is a weighted sum across four dimensions:
-
-### 1. Field Completeness (max 35 points)
-
-Measures what fraction of key fields are present. Core fields carry more weight than secondary fields.
-
-| Field | Points |
-|-------|--------|
-| `company_name` | 10 |
-| `email` | 8 |
-| `phone` | 6 |
-| `website` | 5 |
-| `address` / `city` | 4 (2 each) |
-| `industry` | 2 |
-
-Partial credit: a field that is present but failed verification scores 50% of its point value.
+The score is the sum of seven independent dimensions.
 
 ---
 
-### 2. Verification Quality (max 30 points)
+### A · Contact Richness (max 30)
 
-Rewards leads where extracted data has been confirmed valid.
+Measures quality of named contact data.
 
 | Signal | Points |
 |--------|--------|
-| Email passes format + MX check | 12 |
-| Phone parses to valid E.164 | 8 |
-| Website returns 2xx response | 6 |
-| No duplicate match found | 4 |
+| ≥1 contact with `full_name` | +12 |
+| ≥1 contact with `full_name` + `title` | +8 |
+| ≥1 email linked to a named contact | +6 |
+| ≥1 phone linked to a named contact | +4 |
 
 ---
 
-### 3. Source Quality (max 20 points)
+### B · Channel Availability (max 25)
 
-Reflects the reliability of the data source. Configured per source type.
-
-| Source Type | Points |
-|-------------|--------|
-| Verified directory (e.g. industry association) | 20 |
-| Google Maps / local listing | 15 |
-| LinkedIn company page | 12 |
-| General web scrape | 8 |
-| Manual / unknown | 5 |
-
----
-
-### 4. Extraction Confidence (max 15 points)
-
-Rewards leads where the LLM returned rich, complete output.
+Measures what outreach channels exist.
 
 | Signal | Points |
 |--------|--------|
-| 8+ non-null fields returned | 10 |
-| 5–7 non-null fields | 6 |
-| 3–4 non-null fields | 3 |
-| `extra` fields present | 5 (bonus) |
+| ≥1 company-level email (`info@`, `contact@`, …) | +10 |
+| ≥1 company-level phone | +8 |
+| `company.website` is set | +7 |
 
-> [!note]
-> The 5 bonus points from `extra` can push a lead above 100. The score is capped at 100.
+---
 
-## Score Calculation
+### C · Verification Quality (max 25)
+
+Rewards leads where data has been confirmed valid.
+
+| Signal | Points |
+|--------|--------|
+| ≥1 email with status `VALID` | +10 |
+| ≥1 email with a passing MX record | +5 |
+| ≥1 phone with a known type (mobile / landline) | +5 |
+| Company website returned a 2xx response | +5 |
+
+---
+
+### D · Scrape Quality (max 12)
+
+Reflects how much page content was retrieved.
+
+| Signal | Points |
+|--------|--------|
+| Any pages saved | +5 |
+| ≥1 ABOUT, CONTACT, or TEAM page saved | +4 |
+| ≥1 page with ≥ 50 words of extracted text | +3 |
+
+---
+
+### E · Location Data (max 8)
+
+| Signal | Points |
+|--------|--------|
+| `address` or `city` present | +5 |
+| `country` present | +3 |
+
+---
+
+### F · AEO Opportunity (max 15)
+
+Higher score = more gaps in search optimisation = stronger pitch for AEO / AI-search services. Detected by [[aeo-signals]] from saved HTML — no extra network calls.
+
+| Signal | Points |
+|--------|--------|
+| No JSON-LD at all | +6 |
+| Has JSON-LD but no LocalBusiness/Store schema type | +3 |
+| No `<meta name="viewport">` (not mobile-friendly) | +4 |
+| No Open Graph tags | +3 |
+| Serving over HTTP (not HTTPS) | +2 |
+
+---
+
+### G · Tech Gap Opportunity (max 10)
+
+Higher score = more marketing tech gaps = stronger prospect for digital agencies pitching ads, analytics, or growth services. Detected by [[tech-signals]] from saved HTML — zero extra network calls.
+
+| Signal | Points |
+|--------|--------|
+| Not running any paid ads (no Google Ads, Meta Pixel, or TikTok Pixel) | +4 |
+| No Google Analytics | +2 |
+| No live chat widget | +2 |
+| No blog / content section | +1 |
+| No cookie consent banner | +1 |
+
+> [!tip]
+> For an agency selling Google Ads management, filter the review queue by `tech_signals.google_ads = false`. For Meta Ads, filter by `meta_pixel = false`. Both signals are stored in `score_details.tech_signals`.
+
+---
+
+## Total Score
 
 ```
-score = field_completeness + verification_quality + source_quality + extraction_confidence
-score = min(score, 100)
-score_band = band(score)
+total = A + B + C + D + E + F + G   (max 125)
+band  = HOT if ≥75, WARM if ≥50, else COLD
 ```
 
-## Score Band Assignment
+The maximum theoretical score is 125, but no hard cap is applied — a brand with rich contacts, verified email, a full scrape, location data, and every tech/AEO gap maxed out will score above 100.
 
+## score_details Breakdown
+
+Every `CompanyLead.score_details` JSON object contains:
+
+```json
+{
+  "contact_richness": 20,
+  "channel_availability": 17,
+  "verification_quality": 15,
+  "scrape_quality": 9,
+  "location": 5,
+  "tech_gap": 8,
+  "tech_signals": {
+    "google_ads": false,
+    "meta_pixel": false,
+    "google_analytics": true,
+    "tiktok_pixel": false,
+    "cms": "shopify",
+    "has_chat": false,
+    "has_cookie_banner": true,
+    "has_blog": false,
+    "has_faq": false
+  },
+  "aeo_opportunity": 13,
+  "aeo_signals": {
+    "has_json_ld": false,
+    "has_local_business_schema": false,
+    "has_viewport_meta": true,
+    "has_og_tags": false,
+    "is_https": true
+  },
+  "website_reachable": true,
+  "total": 87
+}
 ```
-score >= 75  → hot
-score >= 50  → warm
-score >= 25  → cold
-score <  25  → disqualified
-```
 
-## Tuning
+## Re-scoring
 
-Weights should be revisited after reviewing the first 200+ leads. Key questions:
-
-- Are `hot` leads actually converting?
-- Are `cold` leads being wrongly discarded?
-- Does source quality correlate with real-world usefulness?
-
-Scoring logic lives in `src/scoring/` as a pure function with no DB side effects — it can be re-run against existing leads without re-scraping or re-extracting.
-
-## Disqualification Rules
-
-A lead is **automatically disqualified** (score = 0, band = `disqualified`) if any of the following are true:
-
-- `company_name` is null
-- Both `email` and `phone` are null
-- The lead is a duplicate of an already-approved lead
-
-These are hard rules applied before the weighted score is computed.
+Scoring is a pure function with no network calls. Run `leads score` again at any time to recompute scores against updated weights without re-scraping or re-extracting.
 
 ## Related Notes
 
-- [[pipeline]] — where scoring sits in the flow
-- [[extraction-strategy]] — extraction confidence signals
-- [[database-schema]] — `lead.score`, `lead.score_band` columns
-- [[phase-1-plan]] — scoring is a phase 1 deliverable
+- [[pipeline]] — stage flow
+- [[ecommerce-discovery]] — Shopify / web-search campaigns and AEO context
+- [[database-schema]] — `company_leads.score`, `score_band`, `score_details` columns

@@ -25,12 +25,15 @@ flowchart LR
 
 ### 1. Discovery
 
-**Input:** Seed configuration (industry filters, geography, source types)
-**Process:** Locate candidate URLs — could be directory listings, search results, or known data sources
-**Output:** `Source` records inserted into PostgreSQL
+**Input:** Campaign configuration (industry, geography, search queries, platform)
+**Process:** Locate candidate companies via one of two tracks:
+- **Google Places** (`discovery_source = places`) — local businesses via Places API
+- **Web Search** (`discovery_source = web_search`) — online brands via Serper.dev (100 results/query, recommended) or DuckDuckGo (free, ~10 results/query)
+
+**Output:** `Company` + `DiscoveryHit` records inserted into PostgreSQL
 **Storage:** DB only
 
-Discovery is intentionally pluggable. Different source adapters (Google Maps, LinkedIn, industry directories) implement the same interface.
+For Shopify campaigns, discovery also fetches `/products.json` to enrich `company.extra_fields` with product count and price range. See [[ecommerce-discovery]] for the full Shopify flow.
 
 ---
 
@@ -52,18 +55,25 @@ Discovery is intentionally pluggable. Different source adapters (Google Maps, Li
 
 ### 3. Extraction
 
-**Input:** `Source` record + HTML file from disk
+**Input:** `DiscoveryHit` records with status `scraped` + HTML files from disk
 **Process:**
-1. Read HTML from disk
-2. Build LLM prompt (system + user message with HTML snippet)
-3. Call LLM, request structured JSON output
+1. Run deterministic regex extraction (emails, phones, URLs) on all saved pages
+2. If no contacts found, try LLM extraction on the best available page (TEAM → CONTACT → ABOUT)
+3. LLM provider: **Ollama** (local, `qwen2.5:7b` recommended) or **Anthropic API** fallback
 4. Write prompt + raw response to `data/llm_runs/<run_id>.json`
-5. Parse response into a `Lead` record
+5. Merge deterministic + LLM results; persist contacts, emails, phones to DB
 
-**Output:** `Lead` record in DB; LLM artifact on disk
+**Output:** `Contact`, `Email`, `Phone` records in DB; LLM artifact on disk
 **Storage:** DB (parsed fields) + Disk (`data/llm_runs/`)
 
-See [[extraction-strategy]] for prompt design and field definitions.
+LLM is only triggered when deterministic extraction finds zero contacts, so most runs use it for a small fraction of pages. See [[extraction-pipeline]] for details.
+
+Configure in `.env`:
+```
+OLLAMA_BASE_URL=http://<machine>:11434
+OLLAMA_MODEL=qwen2.5:7b   # recommended — reliable JSON, fast
+ANTHROPIC_API_KEY=...      # fallback if Ollama not available
+```
 
 ---
 
@@ -83,12 +93,17 @@ See [[extraction-strategy]] for prompt design and field definitions.
 
 ### 5. Scoring
 
-**Input:** Verified `Lead` records
-**Process:** Compute a quality score (0–100) from field completeness, verification results, and source quality
-**Output:** `score` and `score_band` written to `Lead`
+**Input:** Verified `CompanyLead` records + saved HTML pages
+**Process:**
+1. Detect **AEO signals** from saved HTML (JSON-LD, schema type, viewport, OG tags, HTTPS)
+2. Detect **tech signals** from saved HTML (Google Ads, Meta Pixel, GA4, TikTok Pixel, CMS, chat, blog, FAQ, cookie banner)
+3. Compute a quality score from 7 dimensions (A–G): contact richness, channel availability, verification quality, scrape quality, location, AEO opportunity, tech gap
+4. Assign a score band: HOT / WARM / COLD / DISQUALIFIED
+
+**Output:** `score`, `score_band`, and `score_details` (JSON breakdown) written to `CompanyLead`
 **Storage:** DB
 
-See [[scoring-model]] for criteria and weights.
+Both AEO and tech signal detection are pure HTML parsing — no network calls, milliseconds per company. See [[scoring-model]] for dimension weights.
 
 ---
 
