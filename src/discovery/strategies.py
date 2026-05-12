@@ -3,12 +3,15 @@
 Each strategy translates a Campaign's geo configuration into one or more
 ``GeoQuery`` objects that can be passed directly to ``PlacesClient.search()``.
 
-STATE mode returns one GeoQuery per selected city, enabling full state-level
-coverage in a single campaign run. All other methods return a single-element
-list. The list wrapper is intentional — callers never need to change.
+BOUNDING_BOX mode tiles the area into a grid of circle queries when
+``campaign.geo_tile_size_km`` is set. Each tile becomes an independent
+Places API call, maximising unique results across a large area.
+
+All other modes return a single-element list.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
@@ -186,6 +189,35 @@ def _postal_code_queries(campaign: Campaign) -> list[GeoQuery]:
     ]
 
 
+def _tile_centers(
+    sw_lat: float, sw_lng: float,
+    ne_lat: float, ne_lng: float,
+    tile_km: float,
+) -> list[tuple[float, float]]:
+    """Return (lat, lng) centres for a grid of square tiles covering the bbox.
+
+    Uses a flat-earth approximation — accurate enough for city/region scale.
+    Tiles overlap by ~5% so there are no gaps at tile edges.
+    """
+    km_per_lat = 111.0
+    mid_lat = (sw_lat + ne_lat) / 2.0
+    km_per_lng = 111.0 * math.cos(math.radians(mid_lat))
+
+    # Step slightly smaller than tile_km to create ~5% overlap
+    step_lat = (tile_km * 0.95) / km_per_lat
+    step_lng = (tile_km * 0.95) / km_per_lng
+
+    centers: list[tuple[float, float]] = []
+    lat = sw_lat + step_lat / 2
+    while lat < ne_lat:
+        lng = sw_lng + step_lng / 2
+        while lng < ne_lng:
+            centers.append((round(lat, 6), round(lng, 6)))
+            lng += step_lng
+        lat += step_lat
+    return centers
+
+
 def _bounding_box_queries(campaign: Campaign) -> list[GeoQuery]:
     if any(
         v is None
@@ -196,29 +228,55 @@ def _bounding_box_queries(campaign: Campaign) -> list[GeoQuery]:
             f"Campaign {campaign.id}: "
             "geo_sw_lat, geo_sw_lng, geo_ne_lat, geo_ne_lng are required for BOUNDING_BOX mode"
         )
-    location_restriction = {
-        "rectangle": {
-            "low": {
-                "latitude": campaign.geo_sw_lat,
-                "longitude": campaign.geo_sw_lng,
-            },
-            "high": {
-                "latitude": campaign.geo_ne_lat,
-                "longitude": campaign.geo_ne_lng,
-            },
-        }
-    }
+
+    tile_km: float = campaign.geo_tile_size_km or 0.0
+    niches = [campaign.niche] + list(campaign.places_query_variants or [])
+    included_type = _places_type_for_niche(campaign.niche)
+
+    # --- Tiled mode ---
+    if tile_km > 0:
+        centers = _tile_centers(
+            campaign.geo_sw_lat, campaign.geo_sw_lng,
+            campaign.geo_ne_lat, campaign.geo_ne_lng,
+            tile_km,
+        )
+        radius_m = int((tile_km / 2) * 1000 * 1.05)  # half-tile + 5% overlap
+        queries: list[GeoQuery] = []
+        for niche in niches:
+            for lat, lng in centers:
+                queries.append(GeoQuery(
+                    text_query=niche,
+                    location_restriction={
+                        "circle": {
+                            "center": {"latitude": lat, "longitude": lng},
+                            "radius": float(radius_m),
+                        }
+                    },
+                    method=GeoMethod.BOUNDING_BOX.value,
+                    center_lat=lat,
+                    center_lng=lng,
+                    radius_m=radius_m,
+                    included_type=included_type,
+                ))
+        return queries
+
+    # --- Legacy single-query fallback (no tile size set) ---
     center_lat = (campaign.geo_sw_lat + campaign.geo_ne_lat) / 2
     center_lng = (campaign.geo_sw_lng + campaign.geo_ne_lng) / 2
     return [
         GeoQuery(
             text_query=campaign.niche,
-            location_restriction=location_restriction,
+            location_restriction={
+                "rectangle": {
+                    "low":  {"latitude": campaign.geo_sw_lat, "longitude": campaign.geo_sw_lng},
+                    "high": {"latitude": campaign.geo_ne_lat, "longitude": campaign.geo_ne_lng},
+                }
+            },
             method=GeoMethod.BOUNDING_BOX.value,
             center_lat=center_lat,
             center_lng=center_lng,
             radius_m=None,
-            included_type=_places_type_for_niche(campaign.niche),
+            included_type=included_type,
         )
     ]
 

@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
 from src.config.settings import settings
 from src.dashboard.deps import templates
 from src.db.session import get_session
-from src.discovery.city_lists import get_countries, get_states
+from src.discovery.city_lists import get_countries
 from src.models.campaign import Campaign
 from src.models.company_lead import CompanyLead
 from src.models.enums import CampaignGoal, CampaignStatus, DiscoverySource, GeoMethod, ScoreBand
@@ -54,6 +54,30 @@ async def campaign_list(request: Request) -> HTMLResponse:
     )
 
 
+@router.post("/campaigns/expand-queries", response_class=HTMLResponse)
+async def expand_queries_endpoint(
+    request: Request,
+    query: str = Form(""),
+    campaign_goal: str = Form("lead_gen"),
+) -> HTMLResponse:
+    """HTMX endpoint: return expanded query list as a textarea partial."""
+    from src.discovery.query_expansion import expand_queries
+
+    query = query.strip()
+    extras: list[str] = []
+    if query:
+        extras = expand_queries(query, campaign_goal=campaign_goal)
+
+    all_queries = ([query] + extras) if query else []
+    queries_text = "\n".join(all_queries)
+
+    return templates.TemplateResponse(
+        request,
+        "campaigns/_query_textarea.html",
+        {"queries_text": queries_text, "expanded": bool(extras)},
+    )
+
+
 @router.get("/campaigns/new", response_class=HTMLResponse)
 async def campaign_create_form(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -62,7 +86,6 @@ async def campaign_create_form(request: Request) -> HTMLResponse:
         {
             "geo_methods": [m.value for m in GeoMethod],
             "countries": get_countries(),
-            "us_states": get_states("United States"),
             "error": None,
             "web_agency_enabled": settings.web_agency_enabled,
         },
@@ -97,7 +120,6 @@ async def campaign_create(request: Request):
             {
                 "geo_methods": [m.value for m in GeoMethod],
                 "countries": get_countries(),
-                "us_states": get_states("United States"),
                 "error": msg,
                 "form": dict(form),
                 "web_agency_enabled": settings.web_agency_enabled,
@@ -121,6 +143,7 @@ async def campaign_create(request: Request):
             return _err("At least one search query is required for web search campaigns.")
 
         ecommerce_platform = (form.get("ecommerce_platform") or "any").strip() or None
+        search_geo_scope = (form.get("search_geo_scope") or "").strip() or None
 
         with get_session() as session:
             campaign = Campaign(
@@ -131,6 +154,7 @@ async def campaign_create(request: Request):
                 discovery_source=DiscoverySource.WEB_SEARCH,
                 search_queries=search_queries,
                 ecommerce_platform=ecommerce_platform,
+                search_geo_scope=search_geo_scope,
             )
             session.add(campaign)
             session.flush()
@@ -168,6 +192,14 @@ async def campaign_create(request: Request):
 
     # geo_cities_selected comes as a multi-value form field
     geo_cities_selected = form.getlist("geo_cities_selected") or []
+
+    # Bounding box tiling
+    geo_tile_size_km = _float("geo_tile_size_km")
+    places_query_variants_raw = (form.get("places_query_variants") or "").strip()
+    places_query_variants = (
+        [q.strip() for q in places_query_variants_raw.split(",") if q.strip()]
+        if places_query_variants_raw else None
+    )
 
     # Validate required geo fields
     if geo_method == GeoMethod.CITY and not (city and country):
@@ -209,6 +241,8 @@ async def campaign_create(request: Request):
             geo_center_lat=center_lat,
             geo_center_lng=center_lng,
             geo_radius_m=radius_m,
+            geo_tile_size_km=geo_tile_size_km,
+            places_query_variants=places_query_variants,
         )
         session.add(campaign)
         session.flush()
@@ -230,8 +264,7 @@ async def campaign_edit_form(request: Request, campaign_id: uuid.UUID) -> HTMLRe
         {
             "campaign": campaign,
             "campaign_id": campaign_id,
-            "us_states": get_states("United States"),
-            "countries": get_countries(),
+                        "countries": get_countries(),
             "error": None,
         },
     )
@@ -248,8 +281,7 @@ async def campaign_edit(request: Request, campaign_id: uuid.UUID):
             {
                 "campaign": campaign,
                 "campaign_id": campaign_id,
-                "us_states": get_states("United States"),
-                "countries": get_countries(),
+                                "countries": get_countries(),
                 "error": msg,
                 "form": dict(form),
             },
@@ -277,6 +309,7 @@ async def campaign_edit(request: Request, campaign_id: uuid.UUID):
             campaign.search_queries = search_queries
             ecommerce_platform = (form.get("ecommerce_platform") or "any").strip() or None
             campaign.ecommerce_platform = ecommerce_platform if ecommerce_platform != "any" else None
+            campaign.search_geo_scope = (form.get("search_geo_scope") or "").strip() or None
         else:
             # GOOGLE_PLACES: update geo fields
             geo_method_raw = (form.get("geo_method") or "").strip()

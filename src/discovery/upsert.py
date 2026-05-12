@@ -160,8 +160,11 @@ def _merge_fields(company: Company, result: PlaceResult) -> None:
         company.name = result.name
     if not company.website and result.website_uri:
         company.website = result.website_uri
-    # Always sync has_website from the latest Places payload — Places is authoritative.
-    company.has_website = bool(result.website_uri)
+    # has_website is True if ANY source has ever found a website for this company.
+    # Never downgrade to False — a Places result missing website_uri doesn't mean
+    # the company has no website (Places often omits it even when one exists).
+    if result.website_uri:
+        company.has_website = True
     if not company.domain and result.domain:
         company.domain = result.domain
     if not company.address and result.formatted_address:

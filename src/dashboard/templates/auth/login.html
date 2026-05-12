@@ -3,134 +3,171 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in — Lead Discovery</title>
+  <title>Sign in — Leadry</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #0f172a;
-      --surface:    #1e293b;
-      --surface-2:  #263347;
-      --border:     #334155;
-      --border-2:   #475569;
-      --accent:     #38bdf8;
-      --accent-dim: rgba(56,189,248,.12);
-      --accent-glow:rgba(56,189,248,.22);
-      --text:       #f1f5f9;
-      --text-2:     #94a3b8;
-      --text-3:     #64748b;
+      --bg:         #0b0c0f;
+      --paper:      #0f1013;
+      --paper-2:    #13151a;
+      --paper-3:    #1a1d24;
+      --ink:        #f0f0ee;
+      --ink-2:      #a8a8a4;
+      --ink-3:      #5a5a56;
+      --rule:       #2a2c33;
+      --rule-soft:  #1e2026;
+      --accent:     #ff5c2a;
+      --accent-dim: rgba(255,92,42,.1);
+      --accent-glow:rgba(255,92,42,.18);
       --red:        #f87171;
-      --red-bg:     rgba(248,113,113,.13);
-      --radius:     6px;
-      --radius-lg:  10px;
-      --font:       'Plus Jakarta Sans', sans-serif;
-      --font-head:  'Syne', sans-serif;
-      --font-mono:  'DM Mono', monospace;
+      --red-bg:     rgba(248,113,113,.1);
+      --display:    'Inter Tight', sans-serif;
+      --body:       'Inter', sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+      --r-sm:       6px;
+      --r-md:       10px;
+      --r-lg:       14px;
     }
 
     html { font-size: 15px; }
+
     body {
       background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
+      color: var(--ink);
+      font-family: var(--body);
       line-height: 1.6;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
     }
 
-    /* Subtle grid background */
+    /* Radial gradient overlays — matches base.html */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image:
-        linear-gradient(rgba(56,189,248,.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(56,189,248,.03) 1px, transparent 1px);
-      background-size: 48px 48px;
+      background:
+        radial-gradient(ellipse 60% 50% at -5% -10%, rgba(255,92,42,.07) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 105% -5%, rgba(110,231,164,.05) 0%, transparent 55%);
       pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Dot grid */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.045) 1px, transparent 1px);
+      background-size: 24px 24px;
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,.5) 0%, transparent 80%);
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.5) 0%, transparent 80%);
+      pointer-events: none;
+      z-index: 0;
     }
 
     .login-wrap {
       width: 100%;
-      max-width: 380px;
+      max-width: 360px;
       position: relative;
       z-index: 1;
     }
 
-    /* Brand */
+    /* Brand mark */
     .brand {
       display: flex;
       align-items: center;
-      gap: .6rem;
+      gap: .65rem;
       justify-content: center;
-      margin-bottom: 2rem;
+      margin-bottom: 2.25rem;
       text-decoration: none;
     }
-    .brand-icon {
-      width: 36px;
-      height: 36px;
-      background: var(--accent-dim);
-      border: 1px solid rgba(56,189,248,.25);
-      border-radius: 8px;
+
+    .nav-mark {
+      width: 28px;
+      height: 28px;
+      background: var(--ink);
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--accent);
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--bg);
+      position: relative;
+      flex-shrink: 0;
     }
+    .nav-mark::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 5px;
+      height: 5px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
     .brand-name {
-      font-family: var(--font-head);
-      font-size: .9rem;
-      font-weight: 800;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      color: var(--accent);
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.03em;
+      color: var(--ink);
     }
 
     /* Card */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-lg);
       padding: 2rem;
     }
 
     .card-title {
-      font-family: var(--font-head);
-      font-size: 1.3rem;
-      font-weight: 700;
+      font-family: var(--display);
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
       margin-bottom: .3rem;
+      color: var(--ink);
     }
     .card-sub {
-      font-size: .85rem;
-      color: var(--text-2);
+      font-size: .82rem;
+      color: var(--ink-3);
       margin-bottom: 1.75rem;
+      font-family: var(--mono);
     }
 
     /* Form */
-    .form-group { margin-bottom: 1.1rem; }
+    .form-group { margin-bottom: 1rem; }
     .form-label {
       display: block;
-      font-size: .78rem;
+      font-size: .72rem;
       font-weight: 600;
-      color: var(--text-2);
-      letter-spacing: .06em;
+      color: var(--ink-3);
+      letter-spacing: .08em;
       text-transform: uppercase;
       margin-bottom: .4rem;
+      font-family: var(--mono);
     }
     .form-input {
       width: 100%;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: .9rem;
+      background: var(--paper-3);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sm);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: .88rem;
       padding: .6em .85em;
       outline: none;
       transition: border-color .15s, box-shadow .15s;
@@ -139,53 +176,60 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-glow);
     }
-    .form-input::placeholder { color: var(--text-3); }
+    .form-input::placeholder { color: var(--ink-3); }
 
     /* Error */
     .alert-error {
       background: var(--red-bg);
       color: var(--red);
-      border: 1px solid rgba(248,113,113,.25);
-      border-radius: var(--radius);
-      padding: .7rem .9rem;
-      font-size: .85rem;
+      border: 1px solid rgba(248,113,113,.2);
+      border-radius: var(--r-sm);
+      padding: .65rem .9rem;
+      font-size: .82rem;
       margin-bottom: 1.25rem;
       display: flex;
       align-items: center;
       gap: .5rem;
+      font-family: var(--mono);
     }
 
     /* Submit button */
     .btn-submit {
       width: 100%;
-      background: var(--accent);
-      color: #06090f;
-      border: none;
-      border-radius: var(--radius);
-      font-family: var(--font);
-      font-size: .9rem;
-      font-weight: 700;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sm);
+      font-family: var(--display);
+      font-size: .88rem;
+      font-weight: 600;
       padding: .65em 1em;
       cursor: pointer;
-      transition: background .15s, transform .1s;
-      margin-top: .4rem;
-      letter-spacing: .02em;
+      transition: border-color .15s, color .15s, background .15s;
+      margin-top: .5rem;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
     }
-    .btn-submit:hover { background: #7dd3fc; }
-    .btn-submit:active { transform: scale(.98); }
-
-    /* Divider */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 1.5rem 0;
+    .btn-submit:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
     }
+    .btn-submit .arrow {
+      transition: transform .2s;
+      display: inline-block;
+    }
+    .btn-submit:hover .arrow { transform: translateX(3px); }
 
     .footer-note {
       text-align: center;
-      font-size: .78rem;
-      color: var(--text-3);
+      font-size: .72rem;
+      color: var(--ink-3);
       margin-top: 1.5rem;
+      font-family: var(--mono);
     }
   </style>
 </head>
@@ -194,25 +238,17 @@
 <div class="login-wrap">
 
   <div class="brand">
-    <div class="brand-icon">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <circle cx="9" cy="9" r="3" fill="currentColor"/>
-        <circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.2" fill="none" opacity=".45"/>
-        <circle cx="9" cy="9" r="9.5" stroke="currentColor" stroke-width=".8" fill="none" opacity=".2" transform="scale(.94) translate(.54 .54)"/>
-        <line x1="9" y1="0" x2="9" y2="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
-        <line x1="18" y1="9" x2="14" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
-      </svg>
-    </div>
-    <span class="brand-name">Lead Discovery</span>
+    <div class="nav-mark">L</div>
+    <span class="brand-name">Leadry</span>
   </div>
 
   <div class="card">
     <div class="card-title">Sign in</div>
-    <div class="card-sub">Enter your credentials to access the dashboard.</div>
+    <div class="card-sub">authorised access only</div>
 
     {% if error %}
     <div class="alert-error">
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6.5" stroke="currentColor" stroke-width="1.2"/><line x1="7.5" y1="4" x2="7.5" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7.5" cy="11" r=".8" fill="currentColor"/></svg>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/><line x1="7" y1="3.5" x2="7" y2="7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="10" r=".75" fill="currentColor"/></svg>
       {{ error }}
     </div>
     {% endif %}
@@ -224,7 +260,7 @@
         <label class="form-label" for="username">Username</label>
         <input class="form-input" type="text" id="username" name="username"
                autocomplete="username" autofocus
-               placeholder="your username">
+               placeholder="username">
       </div>
 
       <div class="form-group" style="margin-bottom:1.5rem">
@@ -234,11 +270,13 @@
                placeholder="••••••••">
       </div>
 
-      <button type="submit" class="btn-submit">Sign in →</button>
+      <button type="submit" class="btn-submit">
+        Sign in <span class="arrow">→</span>
+      </button>
     </form>
   </div>
 
-  <div class="footer-note">Internal tool — authorised access only.</div>
+  <div class="footer-note">leadry.io — internal dashboard</div>
 
 </div>
 

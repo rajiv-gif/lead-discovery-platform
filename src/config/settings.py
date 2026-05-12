@@ -61,6 +61,13 @@ class Settings:
         self.ollama_base_url: str | None = os.getenv("OLLAMA_BASE_URL")
         self.ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
 
+        # --- Per-stage LLM provider override ---
+        # EXTRACTION_PROVIDER=anthropic forces haiku for extraction even when
+        # OLLAMA_BASE_URL is set. Useful when running large campaigns where local
+        # LLM speed becomes a bottleneck. Unset = use global priority (ollama first).
+        # Valid values: "anthropic" | "local" | unset
+        self.extraction_provider: str | None = os.getenv("EXTRACTION_PROVIDER")
+
         # --- Serper.dev (Google search, takes priority over DuckDuckGo if set) ---
         self.serper_api_key: str | None = os.getenv("SERPER_API_KEY")
 

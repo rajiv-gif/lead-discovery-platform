@@ -66,11 +66,17 @@ def run_web_discovery_for_campaign(
             "for WEB_SEARCH discovery."
         )
 
+    # Apply geography scope — append to every query when set.
+    geo_scope = (campaign.search_geo_scope or "").strip()
+    scoped_queries = (
+        [f"{q} {geo_scope}" for q in raw_queries] if geo_scope else raw_queries
+    )
+
     # For Shopify mode, append the CDN signal so search engines surface stores
     # on custom domains (paid plans) as well as free *.myshopify.com stores.
     queries = (
-        [f'{q} "cdn.shopify.com"' for q in raw_queries]
-        if is_shopify else raw_queries
+        [f'{q} "cdn.shopify.com"' for q in scoped_queries]
+        if is_shopify else scoped_queries
     )
 
     settings = Settings()

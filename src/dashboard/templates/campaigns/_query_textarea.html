@@ -1,0 +1,7 @@
+<textarea class="form-input" id="search_queries" name="search_queries"
+          rows="{% if queries_text.split('\n') | length > 4 %}{{ [queries_text.split('\n') | length + 1, 12] | min }}{% else %}4{% endif %}"
+          placeholder="One query per line, e.g.&#10;luxury fashion&#10;premium streetwear brand&#10;sustainable skincare"
+          style="resize:vertical; font-family:var(--font-mono); font-size:.83rem">{{ queries_text }}</textarea>
+{% if expanded %}
+<div class="form-hint" style="color:var(--accent)">↑ {{ queries_text.split('\n') | length - 1 }} alternatives added — edit or remove any lines you don't want.</div>
+{% endif %}

@@ -138,6 +138,29 @@ def _parse_response(raw: str, method: str = "llm") -> ExtractionResult:
     return result
 
 
+# ---- Client factory ----
+
+
+def get_llm_client(
+    ollama_base_url: str | None = None,
+    ollama_model: str = "llama3.2",
+    anthropic_api_key: str | None = None,
+    anthropic_model: str = "claude-haiku-4-5",
+) -> Optional[LLMClient]:
+    """Return the best available LLM client.
+
+    Priority: Ollama (local) → Anthropic API → None.
+
+    Pass settings values directly; the caller decides where config comes from
+    so this function stays testable without env vars.
+    """
+    if ollama_base_url:
+        return OllamaClient(base_url=ollama_base_url, model=ollama_model)
+    if anthropic_api_key:
+        return AnthropicClient(api_key=anthropic_api_key, model=anthropic_model)
+    return None
+
+
 # ---- Entry point ----
 
 

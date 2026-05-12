@@ -99,7 +99,6 @@
         <label class="form-label" for="geo_method">Method <span style="color:var(--red)">*</span></label>
         <select class="form-select" id="geo_method" name="geo_method" onchange="updateGeoFields()">
           <option value="city"          {% if cur_geo == 'city' %}selected{% endif %}>City</option>
-          <option value="state"         {% if cur_geo == 'state' %}selected{% endif %}>State (multi-city)</option>
           <option value="postal_code"   {% if cur_geo == 'postal_code' %}selected{% endif %}>Postal code</option>
           <option value="bounding_box"  {% if cur_geo == 'bounding_box' %}selected{% endif %}>Bounding box</option>
           <option value="center_radius" {% if cur_geo == 'center_radius' %}selected{% endif %}>Center + radius</option>
@@ -121,34 +120,6 @@
                    value="{{ form.country if form else (campaign.geo_country or '') }}"
                    placeholder="e.g. United States">
           </div>
-        </div>
-      </div>
-
-      <!-- State / multi-city -->
-      <div id="fields_state" style="display:none">
-        <div class="form-grid" style="margin-bottom:.75rem">
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" for="geo_state">State <span style="color:var(--red)">*</span></label>
-            <select class="form-select" id="geo_state" name="geo_state"
-                    hx-get="/api/cities"
-                    hx-trigger="load,change"
-                    hx-vals='{"country": "United States"}'
-                    hx-target="#city-checklist-container"
-                    hx-swap="innerHTML">
-              <option value="">— select state —</option>
-              {% for s in us_states %}
-              <option value="{{ s }}" {% if (form.geo_state if form else campaign.geo_state) == s %}selected{% endif %}>{{ s }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Country</label>
-            <input class="form-input" type="text" value="United States" readonly style="opacity:.6; cursor:default">
-            <input type="hidden" name="country" value="United States">
-          </div>
-        </div>
-        <div id="city-checklist-container">
-          <div style="font-size:.82rem; color:var(--text-3)">Select a state above to choose cities.</div>
         </div>
       </div>
 
@@ -223,7 +194,7 @@
 </div>
 
 <script>
-  const GEO_METHODS = ["city", "state", "postal_code", "bounding_box", "center_radius"];
+  const GEO_METHODS = ["city", "postal_code", "bounding_box", "center_radius"];
 
   function updateGeoFields() {
     const method = document.getElementById("geo_method").value;

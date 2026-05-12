@@ -15,7 +15,7 @@ from src.config.settings import Settings
 from src.db.session import get_session
 from src.extraction.deterministic import extract_from_page
 from src.extraction.linker import link
-from src.extraction.llm import AnthropicClient, OllamaClient, LLMClient, call_llm
+from src.extraction.llm import LLMClient, call_llm, get_llm_client
 from src.extraction.merge import merge
 from src.extraction.models import ExtractionResult
 from src.extraction.persist import persist_result
@@ -166,19 +166,27 @@ def run_extraction_for_campaign(campaign_id: uuid.UUID) -> ExtractionSummary:
     settings = Settings()
     summary = ExtractionSummary()
 
-    llm_client: Optional[LLMClient] = None
-    if settings.ollama_base_url:
-        llm_client = OllamaClient(
-            base_url=settings.ollama_base_url,
-            model=settings.ollama_model,
-        )
-        log.info("Using Ollama for LLM extraction: %s / %s", settings.ollama_base_url, settings.ollama_model)
-    elif settings.anthropic_api_key:
-        llm_client = AnthropicClient(
-            api_key=settings.anthropic_api_key,
-            model=settings.extraction_model,
-        )
-        log.info("Using Anthropic for LLM extraction: %s", settings.extraction_model)
+    # Provider resolution order:
+    #   1. Runtime config (dashboard toggle) — takes priority
+    #   2. EXTRACTION_PROVIDER env var
+    #   3. Default: local first, Anthropic fallback
+    from src.config import runtime as _rt
+    _provider = (_rt.get("extraction_provider") or settings.extraction_provider or "").lower()
+    if _provider == "anthropic":
+        _ollama_url = None  # skip local, go straight to Anthropic
+    elif _provider == "local":
+        _ollama_url = settings.ollama_base_url  # force local, ignore Anthropic key
+    else:
+        _ollama_url = settings.ollama_base_url  # default: local first
+
+    llm_client: Optional[LLMClient] = get_llm_client(
+        ollama_base_url=_ollama_url,
+        ollama_model=settings.ollama_model,
+        anthropic_api_key=settings.anthropic_api_key if _provider != "local" else None,
+        anthropic_model=settings.extraction_model,
+    )
+    if llm_client is not None:
+        log.info("LLM extraction client: %s (provider=%s)", type(llm_client).__name__, _provider or "auto")
 
     llm_runs_dir = Path("data/llm_runs")
     llm_runs_dir.mkdir(parents=True, exist_ok=True)

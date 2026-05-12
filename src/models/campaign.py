@@ -105,6 +105,21 @@ class Campaign(UUIDPrimaryKey, TimestampMixin, Base):
     # "woocommerce" → future; "any" / None → no platform filter
     ecommerce_platform: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # --- Geography scope for web-search queries (WEB_SEARCH only) ---
+    # Plain-text scope appended to every query, e.g. "Netherlands" or "Amsterdam".
+    # None / empty → no geo restriction (global search).
+    search_geo_scope: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # --- Bounding-box grid tiling (BOUNDING_BOX mode only) ---
+    # Side length of each square tile in km. None → single-query fallback (old behaviour).
+    # Typical values: 2 (dense city), 3 (standard), 5 (sparse / rural).
+    geo_tile_size_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # --- Additional Places query variants (GOOGLE_PLACES only) ---
+    # Extra niche terms to run alongside the primary niche, e.g. ["air conditioning", "furnace repair"].
+    # Each variant generates the same tile grid as the primary niche — multiplies API calls.
+    places_query_variants: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+
     discovery_hits: Mapped[list[DiscoveryHit]] = relationship(
         "DiscoveryHit", back_populates="campaign"
     )

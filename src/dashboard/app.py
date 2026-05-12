@@ -23,6 +23,7 @@ from src.config.settings import settings
 from src.dashboard.auth import SessionAuthMiddleware
 from src.dashboard.routes import api, campaigns, detail, export, pipeline, review, status
 from src.dashboard.routes import auth as auth_routes
+from src.dashboard.routes import settings_routes
 
 app = FastAPI(
     title="Lead Discovery Dashboard",
@@ -75,6 +76,7 @@ app.include_router(pipeline.router)
 app.include_router(status.router)
 app.include_router(review.router)
 app.include_router(export.router)
+app.include_router(settings_routes.router)
 
 
 # ---------------------------------------------------------------------------

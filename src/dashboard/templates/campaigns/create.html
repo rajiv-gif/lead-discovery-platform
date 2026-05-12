@@ -97,7 +97,6 @@
         <label class="form-label" for="geo_method">Method <span style="color:var(--red)">*</span></label>
         <select class="form-select" id="geo_method" name="geo_method" onchange="updateGeoFields()">
           <option value="city"          {% if not form or (form.geo_method|default('city')) == 'city' %}selected{% endif %}>City</option>
-          <option value="state"         {% if form and form.geo_method == 'state' %}selected{% endif %}>State (multi-city)</option>
           <option value="postal_code"   {% if form and form.geo_method == 'postal_code' %}selected{% endif %}>Postal code</option>
           <option value="bounding_box"  {% if form and form.geo_method == 'bounding_box' %}selected{% endif %}>Bounding box</option>
           <option value="center_radius" {% if form and form.geo_method == 'center_radius' %}selected{% endif %}>Center + radius</option>
@@ -122,40 +121,6 @@
         </div>
       </div>
 
-      <!-- State / multi-city -->
-      <div id="fields_state" style="display:none">
-        <div class="form-grid" style="margin-bottom:.75rem">
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" for="geo_state">State <span style="color:var(--red)">*</span></label>
-            <select class="form-select" id="geo_state" name="geo_state"
-                    hx-get="/api/cities"
-                    hx-trigger="change"
-                    hx-include="[name='state_country']"
-                    hx-target="#city-checklist-container"
-                    hx-swap="innerHTML"
-                    onchange="syncStateParam(this)">
-              <option value="">— select state —</option>
-              {% for s in us_states %}
-              <option value="{{ s }}" {% if form and form.geo_state == s %}selected{% endif %}>{{ s }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" for="state_country_display">Country</label>
-            <input class="form-input" type="text" id="state_country_display"
-                   value="United States" readonly style="opacity:.6; cursor:default">
-            <input type="hidden" name="country" value="United States">
-          </div>
-        </div>
-        <!-- Hidden param passed with HTMX request -->
-        <input type="hidden" id="state-country-param" name="state_country" value="United States">
-
-        <!-- City checklist — populated via HTMX -->
-        <div id="city-checklist-container">
-          <div style="font-size:.82rem; color:var(--text-3)">Select a state above to choose cities.</div>
-        </div>
-      </div>
-
       <!-- Postal code -->
       <div id="fields_postal_code" style="display:none">
         <div class="form-group" style="margin-bottom:0">
@@ -173,26 +138,51 @@
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label" for="sw_lat">SW latitude <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="number" step="any" id="sw_lat" name="sw_lat"
-                   value="{{ form.sw_lat if form else '' }}">
+                   oninput="updateEstimate()" value="{{ form.sw_lat if form else '' }}">
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label" for="sw_lng">SW longitude <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="number" step="any" id="sw_lng" name="sw_lng"
-                   value="{{ form.sw_lng if form else '' }}">
+                   oninput="updateEstimate()" value="{{ form.sw_lng if form else '' }}">
           </div>
         </div>
-        <div class="form-grid">
+        <div class="form-grid" style="margin-bottom:.75rem">
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label" for="ne_lat">NE latitude <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="number" step="any" id="ne_lat" name="ne_lat"
-                   value="{{ form.ne_lat if form else '' }}">
+                   oninput="updateEstimate()" value="{{ form.ne_lat if form else '' }}">
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label" for="ne_lng">NE longitude <span style="color:var(--red)">*</span></label>
             <input class="form-input" type="number" step="any" id="ne_lng" name="ne_lng"
-                   value="{{ form.ne_lng if form else '' }}">
+                   oninput="updateEstimate()" value="{{ form.ne_lng if form else '' }}">
           </div>
         </div>
+
+        <!-- Tile size + query variants -->
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="geo_tile_size_km">Tile size (km)</label>
+            <select class="form-select" id="geo_tile_size_km" name="geo_tile_size_km" onchange="updateEstimate()">
+              <option value="">Single query (max ~60 results)</option>
+              <option value="5" {% if form and form.geo_tile_size_km == '5' %}selected{% endif %}>5 km — sparse / rural</option>
+              <option value="3" {% if not form or (form.geo_tile_size_km|default('3')) == '3' %}selected{% endif %}>3 km — standard city</option>
+              <option value="2" {% if form and form.geo_tile_size_km == '2' %}selected{% endif %}>2 km — dense city</option>
+              <option value="1.5" {% if form and form.geo_tile_size_km == '1.5' %}selected{% endif %}>1.5 km — maximum coverage</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="places_query_variants">Extra query terms</label>
+            <input class="form-input" type="text" id="places_query_variants" name="places_query_variants"
+                   oninput="updateEstimate()"
+                   value="{{ form.places_query_variants if form else '' }}"
+                   placeholder="e.g. air conditioning, furnace repair">
+            <div class="form-hint" style="margin-top:.25rem">Comma-separated. Each term runs across all tiles.</div>
+          </div>
+        </div>
+
+        <!-- Live estimate -->
+        <div id="bbox-estimate" style="display:none; background:var(--paper-3); border:1px solid var(--border); border-radius:6px; padding:.65rem .9rem; font-size:.82rem; font-family:var(--font-mono); color:var(--text-2)"></div>
       </div>
 
       <!-- Center radius -->
@@ -244,14 +234,31 @@
         <div id="platform-hint" class="form-hint" style="margin-top:.4rem"></div>
       </div>
 
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" for="search_queries">Search queries <span style="color:var(--red)">*</span></label>
-        <textarea class="form-input" id="search_queries" name="search_queries"
-                  rows="4"
-                  placeholder="One query per line, e.g.&#10;luxury fashion&#10;premium streetwear brand&#10;sustainable skincare"
-                  style="resize:vertical; font-family:var(--font-mono); font-size:.83rem">{{ form.search_queries if form else '' }}</textarea>
-        <div class="form-hint" id="queries-hint">Each line runs as a separate DuckDuckGo search. Returns ~10 results per query.</div>
+      <div class="form-group">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.4rem">
+          <label class="form-label" style="margin-bottom:0" for="search_queries">Search queries <span style="color:var(--red)">*</span></label>
+          <button type="button" class="btn btn-ghost btn-sm"
+                  id="expand-btn"
+                  hx-post="/campaigns/expand-queries"
+                  hx-include="#search_queries, [name='ecommerce_platform']:checked"
+                  hx-vals='{"campaign_goal": "lead_gen"}'
+                  hx-target="#queries-container"
+                  hx-swap="innerHTML"
+                  hx-indicator="#expand-spinner"
+                  onclick="setExpandQuery()"
+                  style="font-size:.75rem; padding:.25rem .6rem">
+            <span id="expand-spinner" class="htmx-indicator" style="display:none">…</span>
+            ✦ Expand with AI
+          </button>
+        </div>
+        <div id="queries-container">
+          {%- set queries_text = form.search_queries if form else '' -%}
+          {%- set expanded = false -%}
+          {% include "campaigns/_query_textarea.html" %}
+        </div>
+        <div class="form-hint" id="queries-hint" style="margin-top:.35rem">One query per line. Click "Expand with AI" to generate variations and get more results.</div>
       </div>
+
     </div>
 
     <!-- ── Optional ──────────────────────────────────────────────── -->
@@ -273,7 +280,7 @@
 </div>
 
 <script>
-  const GEO_METHODS = ["city", "state", "postal_code", "bounding_box", "center_radius"];
+  const GEO_METHODS = ["city", "postal_code", "bounding_box", "center_radius"];
 
   function updateGeoFields() {
     const method = document.getElementById("geo_method").value;
@@ -281,6 +288,7 @@
       const el = document.getElementById("fields_" + m);
       if (el) el.style.display = (m === method) ? "" : "none";
     });
+    updateEstimate();
   }
 
   function updateGoal() {
@@ -307,21 +315,6 @@
     document.getElementById("section-web").style.display = isWeb ? "" : "none";
   }
 
-  // Keep the hidden HTMX country param in sync (always United States for now)
-  function syncStateParam(select) {
-    // HTMX picks up [name='state_country'] via hx-include — already set.
-    // Append the state value directly to the HTMX URL via hx-vals instead.
-    select.setAttribute("hx-vals", JSON.stringify({ state: select.value, country: "United States" }));
-    htmx.process(select);
-  }
-
-  // Check/uncheck all city checkboxes
-  function setCityChecks(checked) {
-    document.querySelectorAll('#city-checkboxes input[type="checkbox"]').forEach(function(cb) {
-      cb.checked = checked;
-    });
-  }
-
   function updatePlatformHint() {
     const val = document.querySelector('input[name="ecommerce_platform"]:checked');
     const hint = document.getElementById("platform-hint");
@@ -332,6 +325,77 @@
       hint.textContent = "Searches the open web — any ecommerce platform.";
     }
   }
+
+  function updateEstimate() {
+    const el = document.getElementById("bbox-estimate");
+    if (!el) return;
+
+    const swLat = parseFloat(document.getElementById("sw_lat")?.value);
+    const swLng = parseFloat(document.getElementById("sw_lng")?.value);
+    const neLat = parseFloat(document.getElementById("ne_lat")?.value);
+    const neLng = parseFloat(document.getElementById("ne_lng")?.value);
+    const tileKm = parseFloat(document.getElementById("geo_tile_size_km")?.value || "0");
+    const variantStr = (document.getElementById("places_query_variants")?.value || "").trim();
+    const variantCount = variantStr ? variantStr.split(",").filter(s => s.trim()).length : 0;
+    const queryCount = 1 + variantCount;
+
+    if (isNaN(swLat) || isNaN(swLng) || isNaN(neLat) || isNaN(neLng)) {
+      el.style.display = "none"; return;
+    }
+
+    if (!tileKm) {
+      el.style.display = "";
+      el.textContent = "Single query → max ~60 results. Set a tile size for full coverage.";
+      return;
+    }
+
+    const KM_PER_LAT = 111.0;
+    const midLat = (swLat + neLat) / 2;
+    const kmPerLng = 111.0 * Math.cos(midLat * Math.PI / 180);
+    const step = tileKm * 0.95;
+    const tilesLat = Math.max(1, Math.ceil((neLat - swLat) / (step / KM_PER_LAT)));
+    const tilesLng = Math.max(1, Math.ceil((neLng - swLng) / (step / kmPerLng)));
+    const tiles = tilesLat * tilesLng;
+
+    const PAGES = 3;
+    const apiCalls = tiles * queryCount * PAGES;
+    const costUsd = (apiCalls / 1000) * 32;
+    const leadsLow = Math.round(tiles * queryCount * 1.5);
+    const leadsHigh = Math.round(tiles * queryCount * 4);
+
+    el.style.display = "";
+    el.innerHTML =
+      `${tiles} tiles × ${queryCount} quer${queryCount===1?'y':'ies'} × ${PAGES} pages = ` +
+      `<strong style="color:var(--text)">${apiCalls.toLocaleString()} API calls</strong> · ` +
+      `<strong style="color:var(--accent)">~$${costUsd.toFixed(2)}</strong> · ` +
+      `est. <strong style="color:var(--text)">${leadsLow}–${leadsHigh} unique businesses</strong>`;
+  }
+
+  // Populate hidden query field before HTMX fires so the current textarea
+  // value is included in the expand request.
+  function setExpandQuery() {
+    const ta = document.getElementById("search_queries");
+    const btn = document.getElementById("expand-btn");
+    if (!ta || !btn) return;
+    // Pass textarea value as 'query' param via hx-vals (override)
+    const goal = (document.querySelector('input[name="campaign_goal"]:checked') || {}).value || "lead_gen";
+    btn.setAttribute("hx-vals", JSON.stringify({ query: ta.value, campaign_goal: goal }));
+    htmx.process(btn);
+  }
+
+  // Show spinner text while expanding
+  document.addEventListener("htmx:beforeRequest", function(e) {
+    if (e.target && e.target.id === "expand-btn") {
+      const spinner = document.getElementById("expand-spinner");
+      if (spinner) { spinner.style.display = "inline"; spinner.textContent = "…"; }
+    }
+  });
+  document.addEventListener("htmx:afterRequest", function(e) {
+    if (e.target && e.target.id === "expand-btn") {
+      const spinner = document.getElementById("expand-spinner");
+      if (spinner) spinner.style.display = "none";
+    }
+  });
 
   document.addEventListener("DOMContentLoaded", function() {
     updateGeoFields();
