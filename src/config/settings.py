@@ -85,6 +85,14 @@ class Settings:
         # --- Export ---
         self.export_dir: str = os.getenv("EXPORT_DIR", "data/exports")
 
+        # --- Playwright browser fallback ---
+        # Set PLAYWRIGHT_ENABLED=true and run `playwright install chromium` to enable.
+        # When enabled, pages that fail HTTP scraping (403, Cloudflare, JS shells)
+        # are retried with a headless Chromium browser that executes JavaScript.
+        self.playwright_enabled: bool = os.getenv("PLAYWRIGHT_ENABLED", "false").lower() == "true"
+        # Seconds to wait for page to settle after navigation (networkidle).
+        self.playwright_timeout: float = float(os.getenv("PLAYWRIGHT_TIMEOUT", "20.0"))
+
         # --- Web Agency feature flag ---
         # Set WEB_AGENCY_ENABLED=true to unlock the WEB_AGENCY campaign goal in
         # the dashboard and CLI. Off by default — feature is not yet public.

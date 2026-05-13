@@ -35,10 +35,12 @@ from src.db.session import get_session
 from src.models.company import Company
 from src.models.discovery_hit import DiscoveryHit
 from src.models.enums import CampaignGoal, DiscoveryHitStatus, PageType
+from src.config.settings import settings as _settings
 from src.scraper.classifier import classify_page
 from src.scraper.fetcher import Fetcher, FetchResult, RobotCache
 from src.scraper.page_finder import find_supplemental_urls
 from src.scraper.persist import save_page
+from src.scraper.playwright_fetcher import fetch_with_playwright, should_try_playwright
 
 log = logging.getLogger(__name__)
 
@@ -223,6 +225,21 @@ def _scrape_shopify_store(
     )
 
 
+def _playwright_fallback(url: str, result: FetchResult) -> FetchResult:
+    """Try Playwright if enabled and the HTTP result warrants it."""
+    if not _settings.playwright_enabled:
+        return result
+    if not should_try_playwright(result):
+        return result
+    log.info("HTTP fetch struggled for %r (%s) — retrying with Playwright", url, result.error or result.status_code)
+    pw_result = fetch_with_playwright(url, timeout=_settings.playwright_timeout)
+    if pw_result.ok:
+        log.info("Playwright succeeded for %r (%d bytes)", url, len(pw_result.html))
+        return pw_result
+    log.debug("Playwright also failed for %r — %s", url, pw_result.error)
+    return result  # return original; caller handles failure
+
+
 def _scrape_hit(
     session: Session,
     hit: DiscoveryHit,
@@ -262,6 +279,7 @@ def _scrape_hit(
 
     # --- Fetch homepage ---
     homepage_result: FetchResult = fetcher.fetch(website)
+    homepage_result = _playwright_fallback(website, homepage_result)
 
     if not homepage_result.ok:
         # Deep URL failed — try the root domain before giving up.
@@ -274,6 +292,7 @@ def _scrape_hit(
                 hit.id, website, homepage_result.error, root,
             )
             homepage_result = fetcher.fetch(root)
+            homepage_result = _playwright_fallback(root, homepage_result)
             if homepage_result.ok:
                 # Update stored website to root so future runs go straight there
                 company.website = root
@@ -313,6 +332,7 @@ def _scrape_hit(
             continue
 
         sup_result = fetcher.fetch(sup_url)
+        sup_result = _playwright_fallback(sup_url, sup_result)
         if not sup_result.ok:
             log.debug(
                 "hit %s: supplemental %s fetch failed for %r — %s",
