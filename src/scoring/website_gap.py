@@ -109,8 +109,8 @@ def detect_website_gap(company, pages: list, base_path: Path | None = None) -> W
     combined_html = ""
     total_words = 0
     for page in pages:
-        if base_path and page.page_path:
-            html_path = base_path / page.page_path
+        if base_path and page.raw_html_path:
+            html_path = base_path / page.raw_html_path
             try:
                 combined_html += html_path.read_bytes().decode("utf-8", errors="ignore")
             except OSError:
