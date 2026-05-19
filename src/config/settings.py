@@ -77,6 +77,17 @@ class Settings:
         # 90 = high reliability. Lower values find more emails but with more bounces.
         self.hunter_min_confidence: int = int(os.getenv("HUNTER_MIN_CONFIDENCE", "70"))
 
+        # --- LinkedIn owner lookup (enrichment stage) ---
+        # Set LINKEDIN_LOOKUP_ENABLED=true to enable DuckDuckGo LinkedIn searches.
+        # Off by default — adds ~2s delay per company and may hit DDG rate limits at scale.
+        self.linkedin_lookup_enabled: bool = os.getenv("LINKEDIN_LOOKUP_ENABLED", "false").lower() == "true"
+        # Seconds to sleep between DuckDuckGo requests to avoid rate limiting.
+        self.linkedin_lookup_delay: float = float(os.getenv("LINKEDIN_LOOKUP_DELAY", "2.0"))
+        # When true, only retry without city if primary (city-scoped) query returns nothing.
+        self.linkedin_city_fallback_enabled: bool = os.getenv("LINKEDIN_CITY_FALLBACK_ENABLED", "false").lower() == "true"
+        # When true, only use LinkedIn contact names for SMTP probing if confidence is "high".
+        self.linkedin_smtp_high_confidence_only: bool = os.getenv("LINKEDIN_SMTP_HIGH_CONFIDENCE_ONLY", "true").lower() == "true"
+
         # --- Scraper behaviour ---
         # Set to false to ignore robots.txt and fetch all public pages.
         # robots.txt is advisory, not legally binding for publicly available data.
