@@ -281,11 +281,6 @@ def _enrich_company(
                         is_primary=False,
                         mx_valid=True,
                         verified_at=datetime.now(timezone.utc),
-                        extra_fields={
-                            "source": "hunter",
-                            "hunter_confidence": he.confidence,
-                            "email_type": he.email_type,
-                        },
                     )
                     session.add(email)
                     existing_addresses.add(he.address)
