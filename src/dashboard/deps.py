@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.models.company import Company
 from src.models.company_lead import CompanyLead
 from src.models.discovery_hit import DiscoveryHit
 from src.models.email import Email
@@ -97,6 +98,14 @@ def get_stage_counts(session: Session, campaign_id: uuid.UUID) -> dict:
         )
     ) or 0
 
+    # --- Enrich: companies with hunter_enriched_at in extra_fields ---
+    enriched = session.scalar(
+        select(func.count()).select_from(Company).where(
+            Company.id.in_(company_ids_sq),
+            Company.extra_fields["hunter_enriched_at"].as_string() != None,
+        )
+    ) or 0
+
     # --- Score: company_leads for this campaign ---
     total_leads = session.scalar(
         select(func.count()).select_from(CompanyLead).where(
@@ -122,6 +131,7 @@ def get_stage_counts(session: Session, campaign_id: uuid.UUID) -> dict:
         "total_hits": total_hits,
         "scraped": scraped,
         "extracted": extracted,
+        "enriched": enriched,
         "verified_emails": verified_emails,
         "total_leads": total_leads,
         "pending_review": pending_review,

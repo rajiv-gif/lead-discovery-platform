@@ -18,6 +18,7 @@ from src.dashboard.persistence import get_last_run, on_finish, on_start
 from src.dashboard.tasks import registry
 from src.db.session import get_session
 from src.discovery.runner import run_discovery_for_campaign
+from src.enrichment.runner import run_enrichment_for_campaign
 from src.extraction.runner import run_extraction_for_campaign
 from src.scraper.runner import run_scrape_for_campaign
 from src.scoring.runner import run_scoring_for_campaign
@@ -31,6 +32,7 @@ _RUNNERS = {
     "discover": run_discovery_for_campaign,
     "scrape": run_scrape_for_campaign,
     "extract": run_extraction_for_campaign,
+    "enrich": run_enrichment_for_campaign,
     "verify": run_verification_for_campaign,
     "score": run_scoring_for_campaign,
 }

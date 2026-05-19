@@ -27,6 +27,7 @@ PIPELINE_STAGES = [
     ("discover", "Discovery"),
     ("scrape", "Scrape"),
     ("extract", "Extract"),
+    ("enrich", "Enrich"),
     ("verify", "Verify"),
     ("score", "Score"),
 ]
@@ -52,6 +53,12 @@ def _build_stage_rows(counts: dict) -> list[dict]:
             "label": "Extract",
             "count": counts["extracted"],
             "detail": f"{counts['extracted']} extracted",
+        },
+        {
+            "key": "enrich",
+            "label": "Enrich",
+            "count": counts["enriched"],
+            "detail": f"{counts['enriched']} companies enriched",
         },
         {
             "key": "verify",
